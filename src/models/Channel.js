@@ -16,8 +16,19 @@ const ReportSchema = new mongoose.Schema({
   reportedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
+function slugify(str) {
+  return String(str || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\u0980-\u09FF\s-]/g, '') // keep letters/numbers/Bengali, drop other symbols
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const ChannelSchema = new mongoose.Schema({
   name:        { type: String, required: true },
+  slug:        { type: String, unique: true, sparse: true },
   logo:        { type: String, default: '' },
   description: { type: String, default: '' },
   country:     { type: String, default: '' },
@@ -37,6 +48,30 @@ ChannelSchema.index({ name: 1 });
 ChannelSchema.index({ category: 1 });
 ChannelSchema.index({ country: 1 });
 ChannelSchema.index({ active: 1, order: 1 });
+
+// Generate a unique slug from the channel name (e.g. "Star Jalsha" -> "star-jalsha")
+ChannelSchema.statics.generateUniqueSlug = async function (name, excludeId) {
+  const base = slugify(name) || 'channel';
+  let slug = base;
+  let i = 1;
+  // keep trying until we find a slug not used by any other channel
+  while (
+    await this.exists({ slug, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })
+  ) {
+    i += 1;
+    slug = `${base}-${i}`;
+  }
+  return slug;
+};
+
+// Look up a channel by its Mongo _id OR by its slug (used on the public site)
+ChannelSchema.statics.findByIdOrSlug = async function (idOrSlug) {
+  if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
+    const byId = await this.findById(idOrSlug);
+    if (byId) return byId;
+  }
+  return this.findOne({ slug: idOrSlug });
+};
 
 const Channel = mongoose.model('Channel', ChannelSchema);
 module.exports = Channel;
