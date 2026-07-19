@@ -176,8 +176,8 @@
           <input id="f-desc" class="inp" placeholder="Channel description..."/>
         </div>
         <div>
-          <label class="inp-label">Category</label>
-          <input id="f-category" class="inp" placeholder="News, Sports..."/>
+          <label class="inp-label">Categories (comma separated)</label>
+          <input id="f-category" class="inp" placeholder="News, Sports, HD..."/>
         </div>
         <div>
           <label class="inp-label">Country</label>
@@ -278,6 +278,7 @@ function addServer(data) {
           <option value="auto" ${(!d.type||d.type==='auto')?'selected':''}>Auto-detect</option>
           <option value="hls" ${d.type==='hls'?'selected':''}>HLS (.m3u8)</option>
           <option value="dash" ${d.type==='dash'?'selected':''}>DASH (.mpd)</option>
+          <option value="ts" ${d.type==='ts'?'selected':''}>MPEG-TS (.ts)</option>
           <option value="mp4" ${d.type==='mp4'?'selected':''}>MP4 / Native</option>
         </select>
       </div>
@@ -374,7 +375,7 @@ function openModal(ch) {
   document.getElementById('f-logo').value = ch?.logo || '';
   updateLogoPreview(ch?.logo || '');
   document.getElementById('f-desc').value = ch?.description || '';
-  document.getElementById('f-category').value = ch?.category || '';
+  document.getElementById('f-category').value = (ch?.categories || []).join(', ');
   document.getElementById('f-country').value = ch?.country || '';
   document.getElementById('f-language').value = ch?.language || '';
   document.getElementById('f-tags').value = (ch?.tags || []).join(', ');
@@ -411,7 +412,7 @@ async function saveChannel() {
     name,
     logo: document.getElementById('f-logo').value.trim(),
     description: document.getElementById('f-desc').value.trim(),
-    category: document.getElementById('f-category').value.trim(),
+    categories: document.getElementById('f-category').value.split(',').map(t => t.trim()).filter(Boolean),
     country: document.getElementById('f-country').value.trim(),
     language: document.getElementById('f-language').value.trim(),
     tags: document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
@@ -505,11 +506,11 @@ async function loadChannels() {
         <div class="min-w-0">
           <p class="font-semibold text-[12px] truncate">${ch.name}</p>
           <p class="text-[10px] text-gray-600 truncate">
-            ${ch.category||''}${ch.country?' · '+ch.country:''}
+            ${(ch.categories||[]).join(', ')}${ch.country?' · '+ch.country:''}
             ${reportCount > 0 ? `<span class="badge badge-yellow ml-1 md:hidden"><i class="fas fa-flag text-[8px] mr-0.5"></i>${reportCount}</span>` : ''}
           </p>
         </div>
-        <span class="col-cat text-gray-500 text-[11px] truncate">${ch.category||'—'}</span>
+        <span class="col-cat text-gray-500 text-[11px] truncate">${(ch.categories||[]).join(', ')||'—'}</span>
         <span class="col-srvs text-gray-500 text-[11px]">${(ch.streams||[]).length}</span>
         <span class="col-reports">
           ${reportCount > 0
