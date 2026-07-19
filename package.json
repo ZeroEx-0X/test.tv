@@ -1,0 +1,16 @@
+{
+  "name": "zeroex-tv",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-session": "^1.18.1",
+    "mongoose": "^8.16.0"
+  }
+}
