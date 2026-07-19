@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zeroex TV — Watch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#000;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
+    ::-webkit-scrollbar{width:3px;height:3px;}
+    ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:10px;}
+    .glass{background:rgba(8,8,8,0.9);border:1px solid #141414;backdrop-filter:blur(12px);}
+    @media(min-width:1024px){.main-grid{display:grid;grid-template-columns:1fr 340px;gap:12px;align-items:start;}.right-panel{position:sticky;top:80px;max-height:calc(100vh - 100px);display:flex;flex-direction:column;gap:10px;}.channels-list{flex:1;overflow-y:auto;max-height:calc(100vh - 260px);}}
+    @media(max-width:1023px){.main-grid{display:flex;flex-direction:column;gap:10px;}.channels-list{max-height:55vh;overflow-y:auto;}}
+    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:1.2rem;overflow:hidden;}
+    .video-wrapper video{width:100%;height:100%;object-fit:contain;display:block;}
+    .player-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.95));padding:36px 14px 14px;opacity:0;transition:opacity 0.25s;z-index:20;}
+    .video-wrapper:hover .player-controls{opacity:1;}
+    .player-controls.always-show{opacity:1!important;}
+    .player-controls.fs-hide{opacity:0!important;}
+    .progress-wrap{position:relative;height:4px;background:rgba(255,255,255,0.12);border-radius:4px;cursor:pointer;margin-bottom:10px;transition:height 0.15s;}
+    .progress-wrap:hover{height:6px;}
+    .progress-fill{height:100%;background:#ef4444;border-radius:4px;pointer-events:none;}
+    .vol-slider{-webkit-appearance:none;width:70px;height:3px;background:rgba(255,255,255,0.2);border-radius:4px;outline:none;cursor:pointer;}
+    .vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#fff;border-radius:50%;}
+    .ctrl-btn{background:none;border:none;color:#fff;cursor:pointer;padding:5px 6px;border-radius:6px;font-size:13px;transition:all 0.15s;opacity:0.85;line-height:1;}
+    .ctrl-btn:hover{opacity:1;background:rgba(255,255,255,0.1);}
+    .live-badge{display:inline-flex;align-items:center;gap:4px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;}
+    .live-dot{width:5px;height:5px;background:#fff;border-radius:50%;animation:blink 1.2s infinite;}
+    @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+    .video-wrapper:fullscreen,.video-wrapper:-webkit-full-screen{border-radius:0;}
+    .video-wrapper:fullscreen .player-controls,.video-wrapper:-webkit-full-screen .player-controls{opacity:1;}
+    #player-loader{position:absolute;inset:0;background:rgba(0,0,0,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:25;}
+    #player-loader.hidden{display:none;}
+    .spin-ring{width:40px;height:40px;border:3px solid #1a1a1a;border-top-color:#ef4444;border-radius:50%;animation:spin 0.75s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .ch-card{transition:all 0.2s;cursor:pointer;}
+    .ch-card:hover{border-color:#ef4444!important;transform:translateY(-2px);}
+    .ch-card.playing{border-color:#ef4444!important;box-shadow:0 0 0 1px rgba(239,68,68,0.25);}
+    .slide-tabs{display:flex;gap:6px;overflow-x:auto;white-space:nowrap;padding-bottom:3px;}
+    .slide-tabs::-webkit-scrollbar{height:2px;}
+    .srv-btn{padding:4px 12px;border-radius:20px;border:1px solid #222;font-size:11px;font-weight:600;color:#666;background:#0a0a0a;cursor:pointer;transition:all 0.15s;flex-shrink:0;}
+    .srv-btn:hover{border-color:#333;color:#ccc;}
+    .srv-btn.active{background:#ef4444;border-color:#ef4444;color:#fff;}
+    .srv-btn.failed{border-color:#7f1d1d;color:#ef4444;}
+    #pip-badge{display:none;position:fixed;bottom:16px;right:16px;background:rgba(8,8,8,0.97);border:1px solid rgba(239,68,68,0.35);color:#fff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:30px;z-index:500;cursor:pointer;backdrop-filter:blur(8px);}
+    #toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,0.97);border:1px solid #2a2a2a;color:#fff;font-size:11px;font-weight:600;padding:8px 18px;border-radius:20px;z-index:500;opacity:0;transition:opacity 0.25s;pointer-events:none;backdrop-filter:blur(8px);}
+    #toast.show{opacity:1;}
+    #failover-banner{display:none;position:absolute;top:0;left:0;right:0;background:rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.3);padding:8px 14px;z-index:30;font-size:11px;color:#fbbf24;font-weight:600;text-align:center;}
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+<div id="pip-badge" onclick="togglePiP()"><i class="fas fa-compress mr-1.5"></i>Exit PiP</div>
+<div id="toast"></div>
+
+<header class="w-full max-w-7xl mx-auto px-3 pt-3 pb-0">
+  <div class="glass rounded-2xl px-4 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+      <div class="w-8 h-8 rounded-xl border border-neutral-800 bg-neutral-950 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-tv text-red-500 text-sm"></i>
+      </div>
+      <h1 class="text-base font-black tracking-wide">ZEROEX <span class="text-red-500">TV</span></h1>
+    </a>
+    <a href="/" class="text-xs font-semibold bg-neutral-950 hover:bg-neutral-900 border border-neutral-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-gray-400">
+      <i class="fas fa-arrow-left text-[10px]"></i> <span class="hidden sm:inline">Back</span>
+    </a>
+  </div>
+</header>
+
+<main class="w-full max-w-7xl mx-auto px-3 py-3 flex-1">
+  <div class="main-grid">
+    <section class="flex flex-col gap-3">
+
+      <!-- Video -->
+      <div class="video-wrapper glass border border-neutral-900 shadow-2xl shadow-black/70" id="video-wrap">
+        <div id="failover-banner"><i class="fas fa-exclamation-triangle mr-1.5"></i> Stream failed — trying next server...</div>
+        <div id="player-loader">
+          <div class="spin-ring"></div>
+          <p class="text-[11px] text-gray-500 font-medium" id="loader-text">Loading channel...</p>
+        </div>
+        <video id="video-player" playsinline preload="none"></video>
+        <div class="player-controls" id="player-controls">
+          <div class="progress-wrap" id="progress-wrap">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button class="ctrl-btn" id="btn-play" onclick="togglePlay()"><i class="fas fa-pause" id="play-icon"></i></button>
+            <button class="ctrl-btn" onclick="restartStream()" title="Restart"><i class="fas fa-redo text-[11px]"></i></button>
+            <button class="ctrl-btn" onclick="toggleMute()" title="Mute"><i class="fas fa-volume-up text-[11px]" id="vol-icon"></i></button>
+            <input type="range" class="vol-slider" id="vol-slider" min="0" max="1" step="0.05" value="1" oninput="setVolume(this.value)"/>
+            <div class="ml-2 flex-1"><span class="live-badge"><span class="live-dot"></span>LIVE</span></div>
+            <button class="ctrl-btn" onclick="togglePiP()" title="Picture-in-Picture"><i class="fas fa-external-link-square-alt text-[11px]"></i></button>
+            <button class="ctrl-btn" onclick="toggleFullscreen()" title="Fullscreen"><i class="fas fa-expand text-[11px]" id="fs-icon"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Channel Info -->
+      <div class="glass rounded-2xl p-4 flex items-center gap-3" id="channel-info">
+        <div class="w-12 h-12 rounded-xl bg-white border border-neutral-200/30 flex items-center justify-center p-1.5 flex-shrink-0 overflow-hidden">
+          <span class="text-[10px] font-bold text-red-500" id="ch-logo-fallback">TV</span>
+          <img id="ch-logo" src="" class="w-full h-full object-contain hidden" onerror="this.classList.add('hidden');document.getElementById('ch-logo-fallback').classList.remove('hidden')"/>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm font-bold truncate" id="ch-name">Loading...</h2>
+          <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+            <span class="text-[10px] text-red-500 font-bold uppercase tracking-wider" id="ch-cat"></span>
+            <span class="text-[10px] text-gray-600" id="ch-country"></span>
+            <span class="text-[10px] text-gray-600" id="ch-lang"></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button id="fav-btn" onclick="toggleFav()" class="text-xs bg-neutral-950 border border-neutral-800 hover:border-red-900 px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-gray-500 hover:text-red-400">
+            <i class="fas fa-heart text-[10px]" id="fav-icon"></i>
+            <span class="hidden sm:inline text-[10px] font-semibold" id="fav-label">Save</span>
+          </button>
+          <button id="report-btn" onclick="submitReport()" class="text-xs bg-neutral-950 border border-neutral-800 hover:border-yellow-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-gray-500 hover:text-yellow-500">
+            <i class="fas fa-flag text-[10px]" id="report-icon"></i>
+            <span class="hidden sm:inline text-[10px] font-semibold" id="report-label">Report</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Server Buttons -->
+      <div class="glass rounded-2xl px-4 py-3 flex flex-col gap-2" id="server-section" style="display:none!important">
+        <p class="text-[10px] text-gray-500 font-semibold uppercase tracking-widest">Select Server</p>
+        <div class="flex gap-2 flex-wrap" id="server-btns"></div>
+      </div>
+
+    </section>
+
+    <!-- Right: Related Channels -->
+    <div class="right-panel">
+      <div class="glass rounded-2xl px-3 py-2.5 flex items-center gap-2.5 flex-shrink-0">
+        <i class="fas fa-search text-gray-600 text-[10px]"></i>
+        <input type="text" id="search-input" placeholder="Search channels..."
+          class="w-full bg-transparent border-0 outline-none text-xs text-white placeholder-gray-600"/>
+      </div>
+      <div class="glass rounded-2xl p-3 flex-1 overflow-hidden">
+        <div id="channels-list" class="channels-list grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="text-center py-3 text-[10px] text-gray-700 border-t border-neutral-900/30 mt-auto">
+  &copy; 2026 Zeroex TV
+</footer>
+
+<script>
+const FAV_KEY = 'zeroex_tv_favs';
+const channelId = window.location.pathname.split('/watch/')[1];
+let STREAMS = [];
+let CHANNEL_NAME = '';
+let currentServerIdx = 0;
+let hlsPlayer = null;
+let dashPlayer = null;
+let isMuted = false;
+let fsControlsTimer = null;
+let failoverTimer = null;
+const FAILOVER_TIMEOUT = 20000;
+const video = document.getElementById('video-player');
+const videoWrap = document.getElementById('video-wrap');
+
+// ── Favorites ─────────────────────────────────────────────────────
+function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } }
+function saveFavs(f) { localStorage.setItem(FAV_KEY, JSON.stringify(f)); }
+function updateFavBtn() {
+  const on = getFavs().includes(channelId);
+  document.getElementById('fav-icon').style.color = on ? '#ef4444' : '';
+  document.getElementById('fav-label').textContent = on ? 'Saved' : 'Save';
+  document.getElementById('fav-btn').classList.toggle('border-red-900', on);
+}
+function toggleFav() {
+  let f = getFavs(), added;
+  if (f.includes(channelId)) { f = f.filter(x => x !== channelId); added = false; }
+  else { f.push(channelId); added = true; }
+  saveFavs(f);
+  showToast(added ? '❤️ Saved to Favorites' : '🗑️ Removed');
+  updateFavBtn();
+}
+
+// ── Report ────────────────────────────────────────────────────────
+const REPORT_KEY = 'zeroex_tv_reports';
+function getReported() { try { return JSON.parse(localStorage.getItem(REPORT_KEY) || '[]'); } catch { return []; } }
+function updateReportBtn(already) {
+  const icon = document.getElementById('report-icon');
+  const label = document.getElementById('report-label');
+  const btn = document.getElementById('report-btn');
+  if (already) {
+    icon.style.color = '#eab308';
+    label.textContent = 'Reported';
+    btn.classList.add('border-yellow-800');
+  }
+}
+async function submitReport() {
+  const reported = getReported();
+  if (reported.includes(channelId)) { showToast('⚠️ Already reported'); return; }
+  try {
+    const res = await fetch(`/api/channels/${channelId}/report`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      const r = getReported(); r.push(channelId);
+      localStorage.setItem(REPORT_KEY, JSON.stringify(r));
+      updateReportBtn(true);
+      showToast('🚩 Reported — Thanks for the feedback!');
+    }
+  } catch { showToast('Report failed, try again'); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Loader ────────────────────────────────────────────────────────
+function showLoader(txt) { document.getElementById('loader-text').textContent = txt||'Connecting...'; document.getElementById('player-loader').classList.remove('hidden'); }
+function hideLoader() { document.getElementById('player-loader').classList.add('hidden'); }
+
+// ── Server Buttons ─────────────────────────────────────────────────
+let failedServers = [];
+function buildServerBtns() {
+  if (STREAMS.length <= 1) { document.getElementById('server-section').style.display = 'none'; return; }
+  document.getElementById('server-section').style.removeProperty('display');
+  const cont = document.getElementById('server-btns');
+  cont.innerHTML = STREAMS.map((s, i) =>
+    `<button class="srv-btn ${i===0?'active':''}" onclick="switchServer(${i})" id="srv-${i}">
+      <i class="fas fa-server mr-1 text-[9px]"></i>${s.label||'Server '+(i+1)}
+    </button>`
+  ).join('');
+}
+function updateServerBtns(activeIdx) {
+  STREAMS.forEach((_, i) => {
+    const btn = document.getElementById('srv-'+i);
+    if (!btn) return;
+    btn.classList.remove('active','failed');
+    if (i === activeIdx) btn.classList.add('active');
+    else if (failedServers.includes(i)) btn.classList.add('failed');
+  });
+}
+function switchServer(idx) {
+  if (idx === currentServerIdx && hlsPlayer) return;
+  currentServerIdx = idx;
+  clearTimeout(failoverTimer);
+  document.getElementById('failover-banner').style.display = 'none';
+  updateServerBtns(idx);
+  loadStream(STREAMS[idx]);
+}
+
+// ── Auto Failover ─────────────────────────────────────────────────
+function tryNextServer() {
+  let next = -1;
+  for (let i = 0; i < STREAMS.length; i++) {
+    if (i !== currentServerIdx && !failedServers.includes(i)) { next = i; break; }
+  }
+  if (next === -1) { showLoader('All servers failed. Check back later.'); return; }
+  failedServers.push(currentServerIdx);
+  document.getElementById('failover-banner').style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('failover-banner').style.display = 'none';
+    currentServerIdx = next;
+    updateServerBtns(next);
+    loadStream(STREAMS[next]);
+  }, 1500);
+}
+
+// ── Stream URL Builder ─────────────────────────────────────────────
+function needsProxy(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    // Only auto-proxy mixed content: HTTPS page with HTTP stream
+    // (browser blocks HTTP resources on HTTPS pages)
+    // HTTPS cross-origin streams are tried directly — CDNs usually allow it
+    // and Replit's server may not resolve the CDN hostname anyway
+    if (location.protocol === 'https:' && u.protocol === 'http:') return true;
+  } catch(_) {}
+  return false;
+}
+
+function buildStreamUrl(stream) {
+  let url = stream.url;
+  const useProxy = stream.useProxy || needsProxy(url);
+  if (useProxy) {
+    const params = new URLSearchParams({ url });
+    if (stream.referer) params.set('referer', stream.referer);
+    if (stream.origin) params.set('origin', stream.origin);
+    if (stream.userAgent) params.set('ua', stream.userAgent);
+    url = '/api/iptv/proxy?' + params.toString();
+  }
+  return url;
+}
+
+// ── Detect Stream Type ─────────────────────────────────────────────
+function detectType(stream) {
+  if (stream.type && stream.type !== 'auto') return stream.type;
+  const url = stream.url.toLowerCase();
+  if (url.includes('.m3u8') || url.includes('m3u8')) return 'hls';
+  if (url.includes('.mpd') || url.includes('mpd')) return 'dash';
+  return 'mp4';
+}
+
+// ── Build proxy URL explicitly ─────────────────────────────────────
+function buildProxyUrl(stream) {
+  const params = new URLSearchParams({ url: stream.url });
+  if (stream.referer) params.set('referer', stream.referer);
+  if (stream.origin)  params.set('origin',  stream.origin);
+  if (stream.userAgent) params.set('ua', stream.userAgent);
+  return '/api/iptv/proxy?' + params.toString();
+}
+
+// ── Load Stream ────────────────────────────────────────────────────
+// usingProxy=true means this is already the proxy attempt (no further fallback)
+function loadStream(stream, usingProxy = false) {
+  if (!stream || !stream.url) { showLoader('No stream URL available.'); return; }
+  showLoader('Loading ' + (stream.label || 'stream') + '...');
+
+  // Cleanup previous players
+  if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
+  if (dashPlayer) { dashPlayer.reset(); dashPlayer = null; }
+  video.src = '';
+  clearTimeout(failoverTimer);
+
+  // Decide URL: proxy if forced/explicit, mixed-content, or retrying
+  const url = usingProxy ? buildProxyUrl(stream) : buildStreamUrl(stream);
+  const type = detectType(stream);
+
+  // auto-failover between servers (only when multiple)
+  if (STREAMS.length > 1) {
+    failoverTimer = setTimeout(() => {
+      if (!video.readyState || video.readyState < 3) tryNextServer();
+    }, FAILOVER_TIMEOUT);
+  }
+
+  function onFatal() {
+    clearTimeout(failoverTimer);
+    // Direct failed → silently retry via proxy (CORS/network issue)
+    if (!usingProxy && !url.startsWith('/api/iptv/proxy')) {
+      showLoader('Retrying via server proxy...');
+      setTimeout(() => loadStream(stream, true), 800);
+      return;
+    }
+    // Proxy also failed → next server or error
+    STREAMS.length > 1 ? tryNextServer() : showLoader('Stream unavailable. Try another server or check the URL.');
+  }
+
+  if (type === 'hls') {
+    if (Hls.isSupported()) {
+      hlsPlayer = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        xhrSetup: xhr => { xhr.timeout = 30000; }
+      });
+      hlsPlayer.loadSource(url);
+      hlsPlayer.attachMedia(video);
+      hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => { clearTimeout(failoverTimer); video.play().catch(()=>{}); hideLoader(); });
+      hlsPlayer.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) onFatal(); });
+      hlsPlayer.on(Hls.Events.LEVEL_LOADED, () => clearTimeout(failoverTimer));
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      video.addEventListener('loadedmetadata', () => { clearTimeout(failoverTimer); video.play().catch(()=>{}); hideLoader(); }, { once: true });
+      video.addEventListener('error', onFatal, { once: true });
+    }
+  } else if (type === 'dash') {
+    dashPlayer = dashjs.MediaPlayer().create();
+    dashPlayer.initialize(video, url, true);
+    dashPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => { clearTimeout(failoverTimer); hideLoader(); });
+    dashPlayer.on(dashjs.MediaPlayer.events.ERROR, onFatal);
+  } else {
+    video.src = url;
+    video.play().catch(()=>{});
+    video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
+    video.addEventListener('error', onFatal, { once: true });
+  }
+}
+
+// ── Controls ──────────────────────────────────────────────────────
+function togglePlay() { video.paused ? video.play().catch(()=>{}) : video.pause(); }
+video.addEventListener('play', () => { document.getElementById('play-icon').className = 'fas fa-pause'; });
+video.addEventListener('pause', () => { document.getElementById('play-icon').className = 'fas fa-play'; });
+function setVolume(v) { video.volume = v; video.muted = (v==0); isMuted = (v==0); updateVolIcon(); }
+function toggleMute() { isMuted = !isMuted; video.muted = isMuted; document.getElementById('vol-slider').value = isMuted ? 0 : video.volume; updateVolIcon(); }
+function updateVolIcon() {
+  const v = document.getElementById('vol-icon');
+  const vol = video.muted ? 0 : video.volume;
+  v.className = vol===0 ? 'fas fa-volume-mute text-[11px]' : vol<0.5 ? 'fas fa-volume-down text-[11px]' : 'fas fa-volume-up text-[11px]';
+}
+video.addEventListener('timeupdate', () => {
+  if (!video.duration || !isFinite(video.duration)) return;
+  document.getElementById('progress-fill').style.width = ((video.currentTime/video.duration)*100)+'%';
+});
+function toggleFullscreen() {
+  if (!document.fullscreenElement) videoWrap.requestFullscreen?.() || videoWrap.webkitRequestFullscreen?.();
+  else document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+}
+document.addEventListener('fullscreenchange', () => {
+  document.getElementById('fs-icon').className = document.fullscreenElement ? 'fas fa-compress text-[11px]' : 'fas fa-expand text-[11px]';
+  if (document.fullscreenElement) scheduleFsHide();
+  else document.getElementById('player-controls').classList.remove('fs-hide');
+});
+function scheduleFsHide() { clearTimeout(fsControlsTimer); fsControlsTimer = setTimeout(() => { if (document.fullscreenElement) document.getElementById('player-controls').classList.add('fs-hide'); }, 3000); }
+function showFsControls() { document.getElementById('player-controls').classList.remove('fs-hide'); scheduleFsHide(); }
+videoWrap.addEventListener('mousemove', () => { if (!document.fullscreenElement) return; showFsControls(); });
+videoWrap.addEventListener('touchstart', () => { if (!document.fullscreenElement) return; showFsControls(); }, { passive: true });
+// Click on the video itself (not on a button) → show controls in fullscreen
+video.addEventListener('click', (e) => {
+  if (document.fullscreenElement) { showFsControls(); return; }
+  // Outside fullscreen: tap to show controls briefly
+  const ctrl = document.getElementById('player-controls');
+  ctrl.classList.add('always-show'); clearTimeout(fsControlsTimer); fsControlsTimer = setTimeout(() => ctrl.classList.remove('always-show'), 3500);
+});
+async function togglePiP() {
+  if (!document.pictureInPictureEnabled) { showToast('PiP not supported'); return; }
+  try { document.pictureInPictureElement ? await document.exitPictureInPicture() : await video.requestPictureInPicture(); } catch {}
+}
+video.addEventListener('enterpictureinpicture', () => { document.getElementById('pip-badge').style.display = 'block'; });
+video.addEventListener('leavepictureinpicture', () => { document.getElementById('pip-badge').style.display = 'none'; });
+document.addEventListener('visibilitychange', async () => {
+  if (!document.pictureInPictureEnabled || video.paused) return;
+  try { document.hidden && !document.pictureInPictureElement ? await video.requestPictureInPicture() : !document.hidden && document.pictureInPictureElement ? await document.exitPictureInPicture() : null; } catch {}
+});
+function restartStream() { showToast('🔄 Restarting...'); loadStream(STREAMS[currentServerIdx]); }
+
+// ── Related Channels ──────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#channels-list .ch-card').forEach(card => {
+    card.style.display = (card.querySelector('span')?.textContent || '').toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// ── Load Channel Data ──────────────────────────────────────────────
+async function init() {
+  if (!channelId) { showLoader('Invalid channel URL.'); return; }
+  document.title = 'Loading... — Zeroex TV';
+  try {
+    const [chRes, allRes] = await Promise.all([
+      fetch('/api/channels/' + channelId),
+      fetch('/api/iptv/channels'),
+    ]);
+    if (!chRes.ok) { showLoader('Channel not found.'); return; }
+    const ch = await chRes.json();
+    const all = await allRes.json();
+
+    document.title = ch.name + ' — Zeroex TV';
+    STREAMS = ch.streams || [];
+    CHANNEL_NAME = ch.name;
+
+    // Populate channel info
+    document.getElementById('ch-name').textContent = ch.name;
+    if (ch.category) document.getElementById('ch-cat').textContent = ch.category;
+    if (ch.country) document.getElementById('ch-country').innerHTML = `<i class="fas fa-globe mr-1"></i>${ch.country}`;
+    if (ch.language) document.getElementById('ch-lang').innerHTML = `<i class="fas fa-language mr-1"></i>${ch.language}`;
+    if (ch.logo) {
+      const img = document.getElementById('ch-logo');
+      img.src = ch.logo;
+      img.classList.remove('hidden');
+      document.getElementById('ch-logo-fallback').classList.add('hidden');
+    }
+
+    updateFavBtn();
+    // If server cleared reports (admin fixed), reset our local "reported" flag
+    const reportCount = ch.reportCount ?? (ch.reports ? ch.reports.length : 0);
+    const localReported = getReported().includes(channelId);
+    if (localReported && reportCount === 0) {
+      localStorage.setItem(REPORT_KEY, JSON.stringify(getReported().filter(x => x !== channelId)));
+      updateReportBtn(false);
+    } else {
+      updateReportBtn(localReported);
+    }
+    buildServerBtns();
+
+    // Related channels
+    const related = all.filter(c => c.category === ch.category && String(c._id) !== channelId).slice(0, 30);
+    const list = document.getElementById('channels-list');
+    if (!related.length) {
+      list.innerHTML = '<div class="col-span-full text-center py-10 text-gray-600 text-xs"><i class="fas fa-satellite-dish mb-2 block text-lg"></i>No related channels</div>';
+    } else {
+      list.innerHTML = related.map(c => `
+        <div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5" data-id="${c._id}" onclick="location.href='/watch/${c._id}'">
+          <div class="w-10 h-10 bg-white rounded-lg border border-neutral-200/30 flex items-center justify-center p-1 overflow-hidden mt-1">
+            ${c.logo ? `<img src="${c.logo}" class="w-full h-full object-contain" onerror="this.src=''"/>` : `<span class="text-[8px] font-bold text-red-500">TV</span>`}
+          </div>
+          <span class="text-[9px] font-semibold text-gray-300 line-clamp-2 leading-tight">${c.name}</span>
+        </div>`
+      ).join('');
+      // Mark current as playing
+      document.querySelectorAll(`#channels-list .ch-card[data-id="${channelId}"]`).forEach(el => el.classList.add('playing'));
+    }
+
+    if (STREAMS.length > 0) loadStream(STREAMS[0]);
+    else showLoader('No streams configured.');
+  } catch (err) {
+    showLoader('Failed to load channel.');
+    console.error(err);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

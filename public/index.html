@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zeroex TV — Live Television</title>
+  <meta name="description" content="Watch live TV channels online. Free HD streaming with Zeroex TV."/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;height:4px;}
+    ::-webkit-scrollbar-thumb{background:#1f1f1f;border-radius:10px;}
+    .glass{background:rgba(10,10,10,0.9);border:1px solid #141414;backdrop-filter:blur(12px);}
+    .ch-card{transition:all 0.2s ease;cursor:pointer;position:relative;}
+    .ch-card:hover{border-color:#ef4444!important;transform:translateY(-3px);box-shadow:0 8px 24px rgba(239,68,68,0.12);}
+    .ch-card.faved .fav-btn{color:#ef4444!important;}
+    .fav-btn{position:absolute;top:5px;right:5px;width:20px;height:20px;background:rgba(0,0,0,0.7);border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:#555;transition:all 0.2s;z-index:5;}
+    .fav-btn:hover{color:#ef4444;background:rgba(239,68,68,0.2);}
+    .slide-tabs{display:flex;gap:6px;overflow-x:auto;white-space:nowrap;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
+    .slide-tabs::-webkit-scrollbar{height:2px;}
+    .cat-btn{flex-shrink:0;padding:5px 14px;border-radius:20px;border:1px solid #1c1c1c;font-size:11px;font-weight:600;color:#666;background:#080808;cursor:pointer;transition:all 0.15s;}
+    .cat-btn:hover{border-color:#333;color:#ccc;}
+    .cat-btn.active{background:#ef4444;border-color:#ef4444;color:#fff;}
+    .cat-btn.fav-tab{color:#ef4444;border-color:rgba(239,68,68,0.3);}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(12,12,12,0.98);border:1px solid #2a2a2a;color:#fff;font-size:12px;font-weight:600;padding:9px 20px;border-radius:24px;z-index:500;opacity:0;transition:opacity 0.25s;pointer-events:none;white-space:nowrap;backdrop-filter:blur(8px);}
+    #toast.show{opacity:1;}
+    .inp{background:#0d0d0d;border:1px solid #1c1c1c;color:#fff;border-radius:0.75rem;padding:0.6rem 0.9rem;outline:none;transition:border 0.2s;width:100%;}
+    .inp:focus{border-color:#ef4444;}
+    .inp::placeholder{color:#444;}
+    select.inp option{background:#111;}
+    .live-dot{width:6px;height:6px;background:#ef4444;border-radius:50%;animation:blink 1.4s infinite;display:inline-block;}
+    @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+    #skeleton{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    @media(min-width:640px){#skeleton{grid-template-columns:repeat(4,1fr);}}
+    @media(min-width:768px){#skeleton{grid-template-columns:repeat(5,1fr);}}
+    @media(min-width:1024px){#skeleton{grid-template-columns:repeat(6,1fr);}}
+    @media(min-width:1280px){#skeleton{grid-template-columns:repeat(8,1fr);}}
+    .skel-card{background:#0a0a0a;border:1px solid #141414;border-radius:0.75rem;padding:8px;display:flex;flex-direction:column;align-items:center;gap:6px;animation:pulse 1.5s infinite;}
+    .skel-img{width:48px;height:48px;background:#141414;border-radius:0.75rem;}
+    .skel-txt{width:70%;height:8px;background:#141414;border-radius:4px;}
+    .skel-txt2{width:50%;height:6px;background:#0f0f0f;border-radius:4px;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+<div id="toast"></div>
+
+<!-- Header -->
+<header class="sticky top-0 z-40 w-full px-3 pt-3 pb-2">
+  <div class="max-w-7xl mx-auto glass rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl overflow-hidden border border-neutral-800 bg-neutral-950 flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-tv text-red-500 text-base"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-black tracking-wide">ZEROEX <span class="text-red-500">TV</span></h1>
+        <p class="text-[9px] text-gray-600 tracking-widest uppercase flex items-center gap-1.5">
+          <span class="live-dot"></span>Live Streaming
+        </p>
+      </div>
+    </div>
+    <span class="text-[10px] text-gray-600 bg-neutral-950 border border-neutral-800 px-3 py-1.5 rounded-xl hidden sm:block">
+      <i class="fas fa-signal text-red-500 mr-1.5 text-[9px]"></i>
+      <span id="hdr-count">0</span> Channels
+    </span>
+  </div>
+</header>
+
+<!-- Search + Filter -->
+<section class="w-full max-w-7xl mx-auto px-3 pt-2 pb-1">
+  <div class="glass rounded-2xl px-4 py-3 flex flex-col gap-3">
+    <div class="flex gap-2">
+      <div class="relative flex-1">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-xs pointer-events-none"></i>
+        <input id="search-input" class="inp pl-9 text-sm" placeholder="Search channels, country, category..."/>
+      </div>
+      <select id="country-filter" class="inp text-sm w-auto flex-shrink-0 hidden sm:block" style="width:auto;min-width:120px;">
+        <option value="">All Countries</option>
+      </select>
+      <select id="lang-filter" class="inp text-sm w-auto flex-shrink-0 hidden sm:block" style="width:auto;min-width:120px;">
+        <option value="">All Languages</option>
+      </select>
+    </div>
+    <div class="flex gap-2 sm:hidden">
+      <select id="country-filter-m" class="inp text-xs flex-1"><option value="">All Countries</option></select>
+      <select id="lang-filter-m" class="inp text-xs flex-1"><option value="">All Languages</option></select>
+    </div>
+    <div class="slide-tabs" id="cat-tabs">
+      <button class="cat-btn fav-tab" onclick="setCategory('❤️ Favorites', this)" id="fav-tab-btn">
+        <i class="fas fa-heart mr-1 text-[9px]"></i>Favorites
+      </button>
+      <button class="cat-btn active" onclick="setCategory('All', this)" id="all-tab-btn">All</button>
+    </div>
+  </div>
+</section>
+
+<!-- Channel Grid -->
+<main class="w-full max-w-7xl mx-auto px-3 py-2 flex-1">
+  <div id="skeleton" class="mb-2"></div>
+  <div id="no-results" class="hidden flex-col items-center justify-center py-20 text-gray-600 gap-3">
+    <i class="fas fa-satellite-dish text-4xl"></i>
+    <p class="text-sm font-semibold">No channels found</p>
+    <p class="text-xs text-gray-700">Try a different search or filter</p>
+  </div>
+  <div id="channels-grid" class="hidden grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2"></div>
+  <div id="favs-grid" class="hidden grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+    <p id="no-favs" class="col-span-full text-center py-16 text-gray-600 text-sm">
+      <i class="fas fa-heart text-2xl mb-3 block text-red-900/40"></i>
+      No favorites yet. Tap <i class="fas fa-heart text-red-500 text-[10px]"></i> on any channel.
+    </p>
+  </div>
+</main>
+
+<footer class="text-center py-4 text-[10px] text-gray-700 border-t border-neutral-900/30 mt-auto">
+  &copy; 2026 Zeroex TV &middot; All streams are publicly available online
+</footer>
+
+<script>
+const FAV_KEY = 'zeroex_tv_favs';
+let allChannels = [];
+let activeCategory = 'All';
+let searchQuery = '';
+let countryFilter = '';
+let langFilter = '';
+
+function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } }
+function saveFavs(f) { localStorage.setItem(FAV_KEY, JSON.stringify(f)); }
+
+function toggleFav(id, name, e) {
+  e && e.stopPropagation();
+  let f = getFavs(), added;
+  if (f.includes(id)) { f = f.filter(x => x !== id); added = false; }
+  else { f.push(id); added = true; }
+  saveFavs(f);
+  showToast(added ? '❤️ Added to Favorites' : '🗑️ Removed');
+  document.querySelectorAll(`.ch-card[data-id="${id}"] .fav-btn`).forEach(btn => {
+    btn.style.color = added ? '#ef4444' : '';
+  });
+  if (activeCategory === '❤️ Favorites') renderFavsGrid();
+}
+
+let _tt;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function cardHTML(ch) {
+  const faved = getFavs().includes(String(ch._id));
+  return `<div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5"
+    data-id="${ch._id}" data-name="${(ch.name||'').replace(/"/g,'&quot;')}"
+    data-category="${ch.category||'Other'}" data-country="${ch.country||''}" data-language="${ch.language||''}"
+    onclick="location.href='/watch/${ch._id}'">
+    <button class="fav-btn" onclick="toggleFav('${ch._id}','${(ch.name||'').replace(/'/g,"\\'")}',event)" title="Favorite" style="color:${faved?'#ef4444':''}">
+      <i class="fas fa-heart"></i>
+    </button>
+    <div class="w-12 h-12 bg-white rounded-xl border border-neutral-200/40 flex items-center justify-center p-1.5 mt-1 overflow-hidden">
+      ${ch.logo
+        ? `<img src="${ch.logo}" alt="${ch.name}" class="w-full h-full object-contain" onerror="this.parentElement.innerHTML='<span class=\\'text-[8px] font-bold text-red-500\\'>TV</span>'"/>`
+        : `<span class="text-[8px] font-bold text-red-500">TV</span>`}
+    </div>
+    <span class="text-[9px] font-semibold text-gray-300 line-clamp-2 leading-tight w-full">${ch.name}</span>
+    ${ch.category ? `<span class="text-[8px] text-gray-600 truncate w-full">${ch.category}</span>` : ''}
+  </div>`;
+}
+
+function renderGrid(channels) {
+  const grid = document.getElementById('channels-grid');
+  grid.innerHTML = channels.map(cardHTML).join('');
+}
+
+function filterChannels() {
+  const cards = document.querySelectorAll('#channels-grid .ch-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const name = (card.dataset.name || '').toLowerCase();
+    const cat = card.dataset.category || '';
+    const country = card.dataset.country || '';
+    const lang = card.dataset.language || '';
+    const matchSearch = !searchQuery || name.includes(searchQuery) || cat.toLowerCase().includes(searchQuery) || country.toLowerCase().includes(searchQuery);
+    const matchCat = activeCategory === 'All' || cat === activeCategory;
+    const matchCountry = !countryFilter || country === countryFilter;
+    const matchLang = !langFilter || lang === langFilter;
+    const show = matchSearch && matchCat && matchCountry && matchLang;
+    card.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('no-results').style.display = visible === 0 ? 'flex' : 'none';
+  document.getElementById('hdr-count').textContent = visible;
+}
+
+function setCategory(cat, el) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (cat === '❤️ Favorites') {
+    document.getElementById('channels-grid').classList.add('hidden');
+    document.getElementById('favs-grid').classList.remove('hidden');
+    document.getElementById('no-results').style.display = 'none';
+    renderFavsGrid();
+  } else {
+    document.getElementById('favs-grid').classList.add('hidden');
+    document.getElementById('channels-grid').classList.remove('hidden');
+    filterChannels();
+  }
+}
+
+function renderFavsGrid() {
+  const favIds = getFavs();
+  const favsGrid = document.getElementById('favs-grid');
+  favsGrid.querySelectorAll('.ch-card').forEach(el => el.remove());
+  if (!favIds.length) { document.getElementById('no-favs').style.display = 'block'; return; }
+  document.getElementById('no-favs').style.display = 'none';
+  const favChans = favIds.map(id => allChannels.find(c => String(c._id) === id)).filter(Boolean);
+  if (!favChans.length) { document.getElementById('no-favs').style.display = 'block'; return; }
+  favChans.forEach(ch => {
+    const div = document.createElement('div');
+    div.innerHTML = cardHTML(ch);
+    favsGrid.insertBefore(div.firstElementChild, document.getElementById('no-favs'));
+  });
+}
+
+function buildCatTabs(categories) {
+  const tabs = document.getElementById('cat-tabs');
+  categories.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.textContent = cat;
+    btn.onclick = () => setCategory(cat, btn);
+    tabs.appendChild(btn);
+  });
+}
+
+function buildSelects(countries, languages) {
+  ['country-filter','country-filter-m'].forEach(id => {
+    const sel = document.getElementById(id);
+    countries.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+  });
+  ['lang-filter','lang-filter-m'].forEach(id => {
+    const sel = document.getElementById(id);
+    languages.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; sel.appendChild(o); });
+  });
+}
+
+function showSkeletons(n) {
+  document.getElementById('skeleton').innerHTML = Array(n).fill(0).map(() =>
+    `<div class="skel-card"><div class="skel-img"></div><div class="skel-txt"></div><div class="skel-txt2"></div></div>`
+  ).join('');
+}
+
+async function loadChannels() {
+  showSkeletons(16);
+  try {
+    const [chRes, metaRes] = await Promise.all([
+      fetch('/api/iptv/channels'),
+      fetch('/api/iptv/meta'),
+    ]);
+    allChannels = await chRes.json();
+    const meta = await metaRes.json();
+
+    document.getElementById('skeleton').innerHTML = '';
+    document.getElementById('channels-grid').classList.remove('hidden');
+    renderGrid(allChannels);
+    buildCatTabs(meta.categories || []);
+    buildSelects(meta.countries || [], meta.languages || []);
+
+    const favs = getFavs();
+    const favBtn = document.getElementById('fav-tab-btn');
+    if (favs.length) {
+      document.getElementById('all-tab-btn').classList.remove('active');
+      favBtn.classList.add('active');
+      activeCategory = '❤️ Favorites';
+      document.getElementById('channels-grid').classList.add('hidden');
+      document.getElementById('favs-grid').classList.remove('hidden');
+      renderFavsGrid();
+    } else {
+      filterChannels();
+    }
+  } catch (err) {
+    document.getElementById('skeleton').innerHTML = '';
+    document.getElementById('no-results').style.display = 'flex';
+    console.error('Failed to load channels:', err);
+  }
+}
+
+document.getElementById('search-input').addEventListener('input', function() {
+  searchQuery = this.value.toLowerCase().trim();
+  if (activeCategory !== '❤️ Favorites') filterChannels();
+});
+
+['country-filter','country-filter-m'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function() {
+    countryFilter = this.value;
+    ['country-filter','country-filter-m'].forEach(i => { document.getElementById(i).value = this.value; });
+    if (activeCategory !== '❤️ Favorites') filterChannels();
+  });
+});
+
+['lang-filter','lang-filter-m'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function() {
+    langFilter = this.value;
+    ['lang-filter','lang-filter-m'].forEach(i => { document.getElementById(i).value = this.value; });
+    if (activeCategory !== '❤️ Favorites') filterChannels();
+  });
+});
+
+loadChannels();
+</script>
+</body>
+</html>
