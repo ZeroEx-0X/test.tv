@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Channels — Zeroex TV Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:10px;}
+    .glass{background:rgba(10,10,10,0.95);border:1px solid #1a1a1a;}
+    .sidebar{width:220px;min-height:100vh;background:#060606;border-right:1px solid #141414;flex-shrink:0;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#555;transition:all 0.15s;text-decoration:none;}
+    .nav-item:hover{color:#ccc;background:#0f0f0f;}
+    .nav-item.active{color:#fff;background:#ef4444;}
+    .inp{background:#0a0a0a;border:1px solid #222;color:#fff;border-radius:0.625rem;padding:8px 12px;outline:none;transition:border 0.2s;width:100%;font-size:13px;}
+    .inp:focus{border-color:#ef4444;}
+    .inp::placeholder{color:#3a3a3a;}
+    select.inp option{background:#111;}
+    .inp-label{font-size:11px;font-weight:600;color:#555;margin-bottom:4px;display:block;}
+    .inp-label.required{color:#22d3ee;}
+    .btn-red{background:#ef4444;color:#fff;font-weight:700;font-size:13px;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;transition:background 0.15s;}
+    .btn-red:hover{background:#dc2626;}
+    .btn-ghost{background:transparent;color:#555;font-weight:600;font-size:13px;padding:10px 20px;border-radius:10px;border:1px solid #222;cursor:pointer;transition:all 0.15s;}
+    .btn-ghost:hover{color:#ccc;border-color:#444;}
+    /* Modal */
+    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0;}
+    #modal-overlay.open{display:flex;}
+    #modal-box{background:#080808;border:1px solid #1e1e1e;border-radius:1.25rem;width:100%;max-width:680px;margin:auto;overflow:hidden;}
+    #modal-header{background:#0a0a0a;border-bottom:1px solid #181818;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;}
+    /* Toggle switch */
+    .toggle-wrap{display:flex;align-items:center;gap:10px;}
+    .toggle{position:relative;width:40px;height:22px;cursor:pointer;}
+    .toggle input{opacity:0;width:0;height:0;}
+    .toggle-slider{position:absolute;inset:0;background:#1e1e1e;border-radius:22px;transition:0.2s;}
+    .toggle-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#555;border-radius:50%;transition:0.2s;}
+    .toggle input:checked + .toggle-slider{background:#ef4444;}
+    .toggle input:checked + .toggle-slider:before{transform:translateX(18px);background:#fff;}
+    /* Stream server card */
+    .stream-card{background:#0c0c0c;border:1px solid #1e1e1e;border-radius:0.75rem;padding:14px;margin-bottom:8px;}
+    .stream-card-grid{display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:10px;align-items:end;}
+    @media(max-width:640px){.stream-card-grid{grid-template-columns:1fr 1fr;}}
+    .adv-section{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #1a1a1a;}
+    .adv-section.open{display:block;}
+    .adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+    .adv-toggle-link{font-size:11px;font-weight:700;color:#22d3ee;cursor:pointer;letter-spacing:0.05em;display:inline-flex;align-items:center;gap:4px;margin-top:10px;user-select:none;}
+    .adv-toggle-link:hover{color:#67e8f9;}
+    /* Table */
+    .ch-row{display:grid;grid-template-columns:50px 1fr 100px 60px 80px 80px 120px;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #0f0f0f;font-size:12px;}
+    .ch-row:hover{background:#080808;}
+    .ch-row-head{background:#050505;border-bottom:1px solid #1a1a1a;font-size:10px;font-weight:700;color:#444;letter-spacing:0.08em;text-transform:uppercase;}
+    /* Mobile: card layout */
+    @media(max-width:767px){
+      .sidebar{display:none;}
+      .ch-row-head{display:none;}
+      .ch-row{grid-template-columns:44px 1fr auto;gap:8px;padding:10px 12px;position:relative;}
+      .ch-row .col-cat,.ch-row .col-srvs,.ch-row .col-status{display:none;}
+      .ch-row .col-reports{position:absolute;top:8px;right:48px;font-size:10px;}
+      .ch-row .col-actions{display:flex;align-items:center;gap:4px;}
+      .mob-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:#060606;border-bottom:1px solid #141414;position:sticky;top:0;z-index:10;}
+    }
+    @media(min-width:768px){.mob-header{display:none;}}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+    .badge-green{background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.2);}
+    .badge-red{background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.15);}
+    .badge-yellow{background:rgba(234,179,8,0.12);color:#facc15;border:1px solid rgba(234,179,8,0.25);}
+    #logo-preview{width:40px;height:40px;object-fit:contain;border-radius:8px;border:1px solid #222;background:#fff;display:none;flex-shrink:0;}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,0.98);border:1px solid #2a2a2a;color:#fff;font-size:12px;font-weight:600;padding:9px 20px;border-radius:24px;z-index:999;opacity:0;transition:opacity 0.25s;pointer-events:none;white-space:nowrap;}
+    #toast.show{opacity:1;}
+  </style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- Mobile top bar -->
+<div class="mob-header">
+  <div class="flex items-center gap-2">
+    <div class="w-7 h-7 bg-red-500/10 border border-red-500/30 rounded-lg flex items-center justify-center">
+      <i class="fas fa-tv text-red-500 text-xs"></i>
+    </div>
+    <p class="text-sm font-black">ZEROEX <span class="text-red-500">TV</span></p>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/admin/dashboard" class="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-neutral-800 transition"><i class="fas fa-chart-bar text-xs"></i></a>
+    <a href="/" target="_blank" class="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-neutral-800 transition"><i class="fas fa-external-link-alt text-xs"></i></a>
+    <button onclick="logout()" class="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-neutral-800 transition"><i class="fas fa-sign-out-alt text-xs"></i></button>
+    <button onclick="openModal()" class="btn-red flex items-center gap-1.5 !py-2 !px-3 !text-xs"><i class="fas fa-plus text-[10px]"></i>New</button>
+  </div>
+</div>
+
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="sidebar flex flex-col p-4 gap-1">
+    <div class="flex items-center gap-3 px-2 py-4 mb-4">
+      <div class="w-8 h-8 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center">
+        <i class="fas fa-tv text-red-500 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-sm font-black">ZEROEX <span class="text-red-500">TV</span></p>
+        <p class="text-[9px] text-gray-600">Admin Panel</p>
+      </div>
+    </div>
+    <a href="/admin/dashboard" class="nav-item"><i class="fas fa-chart-bar w-4 text-center"></i>Dashboard</a>
+    <a href="/admin/channels" class="nav-item active"><i class="fas fa-tv w-4 text-center"></i>Channels</a>
+    <a href="/" class="nav-item" target="_blank"><i class="fas fa-external-link-alt w-4 text-center"></i>View Site</a>
+    <div class="flex-1"></div>
+    <button onclick="logout()" class="nav-item text-left w-full"><i class="fas fa-sign-out-alt w-4 text-center"></i>Logout</button>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 p-6 overflow-auto">
+    <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      <div>
+        <h2 class="text-xl font-black">Channels</h2>
+        <p class="text-xs text-gray-600 mt-0.5" id="ch-count-label">Loading...</p>
+      </div>
+      <button onclick="openModal()" class="btn-red flex items-center gap-2">
+        <i class="fas fa-plus text-[11px]"></i>New Channel
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="flex gap-2 mb-4">
+      <div class="relative flex-1 max-w-sm">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-[10px] pointer-events-none"></i>
+        <input id="search-input" class="inp pl-9 text-xs" placeholder="Search channels..."/>
+      </div>
+      <select id="filter-active" class="inp text-xs" style="width:auto;min-width:120px;">
+        <option value="">All Status</option>
+        <option value="true">Active</option>
+        <option value="false">Hidden</option>
+      </select>
+    </div>
+
+    <!-- Table Header (desktop only) -->
+    <div class="ch-row ch-row-head rounded-t-xl">
+      <span>Logo</span><span>Name</span><span class="col-cat">Category</span><span class="col-srvs">Srvs</span><span class="col-reports">Reports</span><span class="col-status">Status</span><span class="col-actions">Actions</span>
+    </div>
+
+    <div id="channels-list"></div>
+    <div id="no-channels" class="hidden text-center py-16 text-gray-600 text-sm">
+      <i class="fas fa-tv text-3xl mb-3 block"></i>No channels found
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <div id="modal-header">
+      <p class="text-sm font-black" id="modal-title">New Signal Record</p>
+      <button onclick="closeModal()" class="text-gray-600 hover:text-white transition"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="p-5 flex flex-col gap-4" style="max-height:80vh;overflow-y:auto;">
+      <!-- Basic Info -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2 sm:grid sm:grid-cols-2 gap-4 flex flex-col">
+          <div>
+            <label class="inp-label">Channel Name *</label>
+            <input id="f-name" class="inp" placeholder="e.g. BBC News"/>
+          </div>
+          <div>
+            <label class="inp-label">Logo URL</label>
+            <div class="flex items-center gap-2">
+              <input id="f-logo" class="inp" placeholder="https://..." oninput="updateLogoPreview(this.value)"/>
+              <img id="logo-preview" alt="preview"/>
+            </div>
+          </div>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="inp-label">Description</label>
+          <input id="f-desc" class="inp" placeholder="Channel description..."/>
+        </div>
+        <div>
+          <label class="inp-label">Category</label>
+          <input id="f-category" class="inp" placeholder="News, Sports..."/>
+        </div>
+        <div>
+          <label class="inp-label">Country</label>
+          <input id="f-country" class="inp" placeholder="UK, US..."/>
+        </div>
+        <div>
+          <label class="inp-label">Language</label>
+          <input id="f-language" class="inp" placeholder="English..."/>
+        </div>
+        <div>
+          <label class="inp-label">Tags</label>
+          <input id="f-tags" class="inp" placeholder="tag1, tag2, tag3"/>
+          <p class="text-[10px] text-gray-600 mt-1">Comma-separated list</p>
+        </div>
+      </div>
+
+      <!-- Toggles -->
+      <div class="flex gap-6">
+        <div>
+          <label class="inp-label mb-2">Active Status</label>
+          <div class="toggle-wrap">
+            <label class="toggle"><input type="checkbox" id="f-active" checked/><span class="toggle-slider"></span></label>
+            <span class="text-xs text-gray-500">Visible in public directory</span>
+          </div>
+        </div>
+        <div>
+          <label class="inp-label mb-2">Featured</label>
+          <div class="toggle-wrap">
+            <label class="toggle"><input type="checkbox" id="f-featured"/><span class="toggle-slider"></span></label>
+            <span class="text-xs text-gray-500">Highlight in UI</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stream Servers -->
+      <div>
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <p class="text-sm font-bold">Stream Servers</p>
+            <p class="text-[11px] text-gray-600 mt-0.5">Add multiple endpoints for failover redundancy.</p>
+          </div>
+          <button onclick="addServer()" class="flex items-center gap-1.5 text-[11px] font-bold text-white bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-1.5 rounded-lg transition">
+            <i class="fas fa-plus text-[9px]"></i> ADD SERVER
+          </button>
+        </div>
+        <div id="streams-container"></div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex items-center justify-end gap-3 pt-2 border-t border-neutral-900">
+        <button onclick="closeModal()" class="btn-ghost">CANCEL</button>
+        <button onclick="saveChannel()" class="btn-red flex items-center gap-2" id="save-btn">
+          <i class="fas fa-satellite-dish text-[11px]"></i> COMMIT RECORD
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let channels = [];
+let editingId = null;
+let serverCount = 0;
+
+async function logout() {
+  await fetch('/admin/api/logout', { method: 'POST' });
+  window.location.href = '/admin/login';
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+let _tt;
+function showToast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = err ? '#7f1d1d' : '#2a2a2a';
+  t.style.color = err ? '#fca5a5' : '#fff';
+  t.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Stream Server Card ─────────────────────────────────────────────
+function addServer(data) {
+  serverCount++;
+  const id = 'srv-' + Date.now() + '-' + serverCount;
+  const d = data || {};
+  const div = document.createElement('div');
+  div.className = 'stream-card';
+  div.id = id;
+  div.innerHTML = `
+    <div class="stream-card-grid">
+      <div>
+        <label class="inp-label">Server Label</label>
+        <input class="inp srv-label" value="${d.label||'Server '+serverCount}" placeholder="Server 1"/>
+      </div>
+      <div>
+        <label class="inp-label">Stream Type</label>
+        <select class="inp srv-type">
+          <option value="auto" ${(!d.type||d.type==='auto')?'selected':''}>Auto-detect</option>
+          <option value="hls" ${d.type==='hls'?'selected':''}>HLS (.m3u8)</option>
+          <option value="dash" ${d.type==='dash'?'selected':''}>DASH (.mpd)</option>
+          <option value="mp4" ${d.type==='mp4'?'selected':''}>MP4 / Native</option>
+        </select>
+      </div>
+      <div>
+        <label class="inp-label required">Stream URL *</label>
+        <input class="inp srv-url" value="${d.url||''}" placeholder="http://..."/>
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:1px;">
+        <button onclick="removeServer('${id}')" class="text-gray-600 hover:text-red-500 transition p-1" title="Remove server">
+          <i class="fas fa-trash-alt text-xs"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="adv-toggle-link" onclick="toggleAdv(this)">
+      <i class="fas fa-sliders-h" style="font-size:9px;"></i> ADVANCED CONFIG
+      <i class="fas fa-chevron-down adv-icon" style="font-size:8px;transition:transform 0.2s;"></i>
+    </div>
+
+    <div class="adv-section">
+      <div class="adv-grid">
+        <div>
+          <label class="inp-label">Referer</label>
+          <input class="inp srv-referer" value="${d.referer||''}" placeholder=""/>
+        </div>
+        <div>
+          <label class="inp-label">Origin</label>
+          <input class="inp srv-origin" value="${d.origin||''}" placeholder=""/>
+        </div>
+        <div>
+          <label class="inp-label">User-Agent</label>
+          <input class="inp srv-useragent" value="${d.userAgent||''}" placeholder=""/>
+        </div>
+        <div>
+          <label class="inp-label">DRM Key (ClearKey)</label>
+          <input class="inp srv-drmkey" value="${d.drmKey||''}" placeholder=""/>
+        </div>
+      </div>
+      <div class="toggle-wrap">
+        <label class="toggle"><input type="checkbox" class="srv-proxy" ${d.useProxy?'checked':''}/><span class="toggle-slider"></span></label>
+        <span class="text-xs text-gray-500">Route through Server Proxy (CORS bypass)</span>
+      </div>
+    </div>
+  `;
+  document.getElementById('streams-container').appendChild(div);
+}
+
+function toggleAdv(link) {
+  const card = link.closest('.stream-card');
+  const section = card.querySelector('.adv-section');
+  const icon = link.querySelector('.adv-icon');
+  section.classList.toggle('open');
+  icon.style.transform = section.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+
+function removeServer(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function getStreams() {
+  const cards = document.querySelectorAll('#streams-container .stream-card');
+  return Array.from(cards).map(card => ({
+    url: card.querySelector('.srv-url').value.trim(),
+    label: card.querySelector('.srv-label').value.trim() || 'Server 1',
+    type: card.querySelector('.srv-type').value,
+    referer: card.querySelector('.srv-referer').value.trim(),
+    origin: card.querySelector('.srv-origin').value.trim(),
+    userAgent: card.querySelector('.srv-useragent').value.trim(),
+    drmKey: card.querySelector('.srv-drmkey').value.trim(),
+    useProxy: card.querySelector('.srv-proxy').checked,
+  })).filter(s => s.url);
+}
+
+// ── Modal ──────────────────────────────────────────────────────────
+function updateLogoPreview(url) {
+  const img = document.getElementById('logo-preview');
+  if (url && url.startsWith('http')) {
+    img.src = url;
+    img.style.display = 'block';
+    img.onerror = () => { img.style.display = 'none'; };
+    img.onload  = () => { img.style.display = 'block'; };
+  } else {
+    img.style.display = 'none';
+    img.src = '';
+  }
+}
+
+function openModal(ch) {
+  editingId = ch ? ch._id : null;
+  serverCount = 0;
+  document.getElementById('modal-title').textContent = ch ? '← BACK    EDIT CHANNEL' : '← BACK    NEW SIGNAL RECORD';
+  document.getElementById('f-name').value = ch?.name || '';
+  document.getElementById('f-logo').value = ch?.logo || '';
+  updateLogoPreview(ch?.logo || '');
+  document.getElementById('f-desc').value = ch?.description || '';
+  document.getElementById('f-category').value = ch?.category || '';
+  document.getElementById('f-country').value = ch?.country || '';
+  document.getElementById('f-language').value = ch?.language || '';
+  document.getElementById('f-tags').value = (ch?.tags || []).join(', ');
+  document.getElementById('f-active').checked = ch ? ch.active : true;
+  document.getElementById('f-featured').checked = ch ? !!ch.featured : false;
+  document.getElementById('streams-container').innerHTML = '';
+  if (ch && ch.streams && ch.streams.length) {
+    ch.streams.forEach(s => addServer(s));
+  } else {
+    addServer();
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// ── Save ───────────────────────────────────────────────────────────
+async function saveChannel() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { showToast('Channel name is required', true); return; }
+  const streams = getStreams();
+  if (!streams.length) { showToast('At least one stream URL is required', true); return; }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const body = {
+    name,
+    logo: document.getElementById('f-logo').value.trim(),
+    description: document.getElementById('f-desc').value.trim(),
+    category: document.getElementById('f-category').value.trim(),
+    country: document.getElementById('f-country').value.trim(),
+    language: document.getElementById('f-language').value.trim(),
+    tags: document.getElementById('f-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+    active: document.getElementById('f-active').checked,
+    featured: document.getElementById('f-featured').checked,
+    streams,
+  };
+
+  try {
+    const res = await fetch(editingId ? `/api/channels/${editingId}` : '/api/channels', {
+      method: editingId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(editingId ? '✅ Channel updated' : '✅ Channel created');
+      closeModal();
+      loadChannels();
+    } else {
+      showToast(data.message || 'Save failed', true);
+    }
+  } catch (err) {
+    showToast('Network error', true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-satellite-dish" style="font-size:11px;margin-right:6px;"></i> COMMIT RECORD';
+  }
+}
+
+// ── Toggle Active ──────────────────────────────────────────────────
+async function toggleActive(id) {
+  try {
+    const res = await fetch(`/api/channels/${id}/toggle`, { method: 'PATCH' });
+    const data = await res.json();
+    if (data.success) { loadChannels(); showToast(data.active ? '👁️ Channel shown' : '🙈 Channel hidden'); }
+  } catch { showToast('Error', true); }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────
+async function fixChannel(id) {
+  if (!confirm('Mark as fixed? This will clear all reports for this channel.')) return;
+  try {
+    const res = await fetch(`/api/channels/${id}/report`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast('✅ Reports cleared — channel marked as fixed'); loadChannels(); }
+    else showToast(data.message, true);
+  } catch { showToast('Fix failed', true); }
+}
+
+async function deleteChannel(id, name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/channels/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) { showToast('🗑️ ' + data.message); loadChannels(); }
+    else showToast(data.message, true);
+  } catch { showToast('Delete failed', true); }
+}
+
+// ── Load Channels ──────────────────────────────────────────────────
+async function loadChannels() {
+  const search = document.getElementById('search-input').value;
+  const active = document.getElementById('filter-active').value;
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (active !== '') params.set('active', active);
+
+  try {
+    const res = await fetch('/admin/api/channels?' + params.toString());
+    if (!res.ok) { window.location.href = '/admin/login'; return; }
+    channels = await res.json();
+
+    document.getElementById('ch-count-label').textContent = `${channels.length} channel${channels.length!==1?'s':''} total`;
+
+    const list = document.getElementById('channels-list');
+    if (!channels.length) {
+      list.innerHTML = '';
+      document.getElementById('no-channels').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('no-channels').classList.add('hidden');
+    list.innerHTML = channels.map(ch => {
+      const reportCount = (ch.reports || []).length;
+      const safeJSON = JSON.stringify(ch).replace(/'/g, "&#39;");
+      return `
+      <div class="ch-row">
+        <div class="w-9 h-9 bg-white rounded-lg border border-neutral-200/30 flex items-center justify-center overflow-hidden p-1 flex-shrink-0">
+          ${ch.logo ? `<img src="${ch.logo}" class="w-full h-full object-contain" onerror="this.style.display='none'"/>` : `<i class="fas fa-tv text-red-500 text-[10px]"></i>`}
+        </div>
+        <div class="min-w-0">
+          <p class="font-semibold text-[12px] truncate">${ch.name}</p>
+          <p class="text-[10px] text-gray-600 truncate">
+            ${ch.category||''}${ch.country?' · '+ch.country:''}
+            ${reportCount > 0 ? `<span class="badge badge-yellow ml-1 md:hidden"><i class="fas fa-flag text-[8px] mr-0.5"></i>${reportCount}</span>` : ''}
+          </p>
+        </div>
+        <span class="col-cat text-gray-500 text-[11px] truncate">${ch.category||'—'}</span>
+        <span class="col-srvs text-gray-500 text-[11px]">${(ch.streams||[]).length}</span>
+        <span class="col-reports">
+          ${reportCount > 0
+            ? `<span class="badge badge-yellow"><i class="fas fa-flag text-[9px] mr-1"></i>${reportCount}</span>`
+            : `<span class="text-gray-700 text-[10px]">—</span>`}
+        </span>
+        <span class="col-status">
+          <span class="badge ${ch.active?'badge-green':'badge-red'}">${ch.active?'Active':'Hidden'}</span>
+        </span>
+        <div class="col-actions flex items-center gap-1">
+          ${reportCount > 0
+            ? `<button onclick="fixChannel('${ch._id}')" class="text-gray-600 hover:text-green-400 transition p-1.5 rounded-lg hover:bg-green-500/10" title="Mark as Fixed"><i class="fas fa-wrench text-[11px]"></i></button>`
+            : ''}
+          <button onclick='openModal(JSON.parse(this.dataset.ch))' data-ch='${safeJSON}' class="text-gray-600 hover:text-white transition p-1.5 rounded-lg hover:bg-neutral-800" title="Edit">
+            <i class="fas fa-edit text-[11px]"></i>
+          </button>
+          <button onclick="toggleActive('${ch._id}')" class="text-gray-600 hover:text-white transition p-1.5 rounded-lg hover:bg-neutral-800" title="${ch.active?'Hide':'Show'}">
+            <i class="fas fa-${ch.active?'eye-slash':'eye'} text-[11px]"></i>
+          </button>
+          <button onclick="deleteChannel('${ch._id}','${(ch.name||'').replace(/'/g,"\\'")}')\"" class="text-gray-600 hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-500/10" title="Delete">
+            <i class="fas fa-trash text-[11px]"></i>
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// ── Search debounce ────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('search-input').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadChannels, 300); });
+document.getElementById('filter-active').addEventListener('change', loadChannels);
+
+loadChannels();
+</script>
+</body>
+</html>

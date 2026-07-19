@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Login — Zeroex TV</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+    .glass{background:rgba(10,10,10,0.95);border:1px solid #1a1a1a;backdrop-filter:blur(20px);}
+    .inp{background:#0a0a0a;border:1px solid #222;color:#fff;border-radius:0.75rem;padding:0.75rem 1rem;outline:none;transition:border 0.2s;width:100%;font-size:14px;}
+    .inp:focus{border-color:#ef4444;}
+    .inp::placeholder{color:#444;}
+    .btn-red{background:#ef4444;border:none;color:#fff;font-weight:700;padding:0.75rem 1.5rem;border-radius:0.75rem;cursor:pointer;transition:background 0.15s;width:100%;font-size:14px;}
+    .btn-red:hover{background:#dc2626;}
+    .btn-red:disabled{opacity:0.5;cursor:not-allowed;}
+  </style>
+</head>
+<body>
+  <div class="w-full max-w-sm px-4">
+    <div class="glass rounded-2xl p-8 flex flex-col gap-6">
+      <div class="text-center">
+        <div class="w-14 h-14 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h10M7 12h6M7 17h4"/></svg>
+        </div>
+        <h1 class="text-2xl font-black">ZEROEX <span class="text-red-500">TV</span></h1>
+        <p class="text-xs text-gray-600 mt-1">Admin Panel</p>
+      </div>
+
+      <div id="error-box" class="hidden bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold px-4 py-3 rounded-xl"></div>
+
+      <form id="login-form" class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-500 font-semibold mb-1.5 block">Username</label>
+          <input id="username" type="text" class="inp" placeholder="admin" autocomplete="username" value="admin"/>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 font-semibold mb-1.5 block">Password</label>
+          <input id="password" type="password" class="inp" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <button type="submit" class="btn-red mt-2" id="submit-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const errBox = document.getElementById('error-box');
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      errBox.classList.add('hidden');
+      try {
+        const res = await fetch('/admin/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = '/admin/dashboard';
+        } else {
+          errBox.textContent = data.message || 'Invalid credentials';
+          errBox.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'Sign In';
+        }
+      } catch {
+        errBox.textContent = 'Network error. Please try again.';
+        errBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+  </script>
+</body>
+</html>

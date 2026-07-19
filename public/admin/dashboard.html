@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Zeroex TV Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
+    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:10px;}
+    .glass{background:rgba(10,10,10,0.95);border:1px solid #1a1a1a;}
+    .sidebar{width:220px;min-height:100vh;background:#060606;border-right:1px solid #141414;flex-shrink:0;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:#555;transition:all 0.15s;text-decoration:none;}
+    .nav-item:hover{color:#ccc;background:#0f0f0f;}
+    .nav-item.active{color:#fff;background:#ef4444;}
+    .stat-card{background:#080808;border:1px solid #141414;border-radius:1rem;padding:20px;flex:1;min-width:130px;}
+    .inp{background:#0a0a0a;border:1px solid #1e1e1e;color:#fff;border-radius:0.5rem;padding:6px 10px;outline:none;font-size:12px;width:100%;}
+  </style>
+</head>
+<body>
+<div class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="sidebar flex flex-col p-4 gap-1">
+    <div class="flex items-center gap-3 px-2 py-4 mb-4">
+      <div class="w-8 h-8 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center">
+        <i class="fas fa-tv text-red-500 text-sm"></i>
+      </div>
+      <div>
+        <p class="text-sm font-black">ZEROEX <span class="text-red-500">TV</span></p>
+        <p class="text-[9px] text-gray-600">Admin Panel</p>
+      </div>
+    </div>
+    <a href="/admin/dashboard" class="nav-item active"><i class="fas fa-chart-bar w-4 text-center"></i>Dashboard</a>
+    <a href="/admin/channels" class="nav-item"><i class="fas fa-tv w-4 text-center"></i>Channels</a>
+    <a href="/" class="nav-item" target="_blank"><i class="fas fa-external-link-alt w-4 text-center"></i>View Site</a>
+    <div class="flex-1"></div>
+    <button onclick="logout()" class="nav-item text-left w-full"><i class="fas fa-sign-out-alt w-4 text-center"></i>Logout</button>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 p-6 overflow-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-xl font-black">Dashboard</h2>
+        <p class="text-xs text-gray-600 mt-0.5">Visitor analytics overview</p>
+      </div>
+      <button onclick="loadAnalytics()" class="text-xs bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-3 py-2 rounded-xl transition flex items-center gap-2">
+        <i class="fas fa-sync-alt text-[10px]" id="refresh-icon"></i>Refresh
+      </button>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="flex flex-wrap gap-3 mb-6" id="stats-grid">
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-sun mr-1.5 text-yellow-500/60"></i>Today</p><p class="text-3xl font-black" id="s-today">—</p></div>
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-calendar-week mr-1.5 text-blue-500/60"></i>7 Days</p><p class="text-3xl font-black" id="s-week">—</p></div>
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-calendar mr-1.5 text-purple-500/60"></i>30 Days</p><p class="text-3xl font-black" id="s-month">—</p></div>
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-users mr-1.5 text-green-500/60"></i>Total</p><p class="text-3xl font-black" id="s-total">—</p></div>
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-circle mr-1.5 text-red-500"></i>Online Now</p><p class="text-3xl font-black text-red-500" id="s-online">—</p></div>
+      <div class="stat-card"><p class="text-[10px] text-gray-600 font-semibold uppercase tracking-widest mb-2"><i class="fas fa-tv mr-1.5 text-red-500/60"></i>Channels</p><p class="text-3xl font-black" id="s-channels">—</p></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Country Chart -->
+      <div class="glass rounded-2xl p-5">
+        <p class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">Visitors by Country</p>
+        <canvas id="country-chart" height="200"></canvas>
+      </div>
+
+      <!-- Recent Visitors -->
+      <div class="glass rounded-2xl p-5">
+        <p class="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">Recent Visitors</p>
+        <div class="overflow-auto max-h-64">
+          <table class="w-full text-[11px]">
+            <thead><tr class="text-gray-600 border-b border-neutral-900"><th class="text-left pb-2 font-semibold">IP</th><th class="text-left pb-2 font-semibold">Location</th><th class="text-left pb-2 font-semibold">Last Seen</th><th class="text-right pb-2 font-semibold">Visits</th></tr></thead>
+            <tbody id="visitors-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let chart = null;
+
+async function logout() {
+  await fetch('/admin/api/logout', { method: 'POST' });
+  window.location.href = '/admin/login';
+}
+
+async function loadAnalytics() {
+  document.getElementById('refresh-icon').style.animation = 'spin 0.5s linear infinite';
+  try {
+    const res = await fetch('/admin/api/analytics');
+    if (!res.ok) { window.location.href = '/admin/login'; return; }
+    const d = await res.json();
+
+    document.getElementById('s-today').textContent = d.today.toLocaleString();
+    document.getElementById('s-week').textContent = d.week.toLocaleString();
+    document.getElementById('s-month').textContent = d.month.toLocaleString();
+    document.getElementById('s-total').textContent = d.total.toLocaleString();
+    document.getElementById('s-online').textContent = d.online.toLocaleString();
+    document.getElementById('s-channels').textContent = d.channelCount.toLocaleString();
+
+    // Country chart
+    const labels = d.byCountry.map(x => x._id);
+    const values = d.byCountry.map(x => x.count);
+    if (chart) chart.destroy();
+    chart = new Chart(document.getElementById('country-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: 'rgba(239,68,68,0.7)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 4 }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#111' } },
+          y: { ticks: { color: '#555', font: { size: 10 } }, grid: { color: '#111' } }
+        }
+      }
+    });
+
+    // Recent visitors table
+    const tbody = document.getElementById('visitors-table');
+    tbody.innerHTML = (d.recentVisitors || []).map(v => `
+      <tr class="border-b border-neutral-900/50 hover:bg-neutral-900/30">
+        <td class="py-2 text-gray-400 font-mono">${v.ip}</td>
+        <td class="py-2 text-gray-500">${v.city !== 'Unknown' ? v.city + ', ' : ''}${v.country}</td>
+        <td class="py-2 text-gray-600">${new Date(v.lastSeen).toLocaleDateString()}</td>
+        <td class="py-2 text-right text-gray-400">${v.totalVisits}</td>
+      </tr>`
+    ).join('') || '<tr><td colspan="4" class="py-6 text-center text-gray-600">No visitors yet</td></tr>';
+  } catch (err) {
+    console.error(err);
+  } finally {
+    document.getElementById('refresh-icon').style.animation = '';
+  }
+}
+
+loadAnalytics();
+setInterval(loadAnalytics, 30000);
+</script>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</body>
+</html>
