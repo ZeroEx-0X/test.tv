@@ -155,7 +155,7 @@ function cardHTML(ch) {
   return `<div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5"
     data-id="${ch._id}" data-name="${(ch.name||'').replace(/"/g,'&quot;')}"
     data-category="${ch.category||'Other'}" data-country="${ch.country||''}" data-language="${ch.language||''}"
-    onclick="location.href='/watch/${ch._id}'">
+    onclick="location.href='/watch/${ch.slug || ch._id}'">
     <button class="fav-btn" onclick="toggleFav('${ch._id}','${(ch.name||'').replace(/'/g,"\\'")}',event)" title="Favorite" style="color:${faved?'#ef4444':''}">
       <i class="fas fa-heart"></i>
     </button>
