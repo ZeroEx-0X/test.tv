@@ -488,8 +488,10 @@ async function init() {
     }
     buildServerBtns();
 
-    // Related channels
-    const related = all.filter(c => c.category === ch.category && String(c._id) !== realId).slice(0, 30);
+    // Related channels: same category first, then every other channel below it
+    const sameCategory = all.filter(c => c.category === ch.category && String(c._id) !== realId);
+    const others = all.filter(c => c.category !== ch.category && String(c._id) !== realId);
+    const related = [...sameCategory, ...others];
     const list = document.getElementById('channels-list');
     if (!related.length) {
       list.innerHTML = '<div class="col-span-full text-center py-10 text-gray-600 text-xs"><i class="fas fa-satellite-dish mb-2 block text-lg"></i>No related channels</div>';
