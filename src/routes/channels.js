@@ -53,10 +53,10 @@ router.get('/stats', requireAdmin, async (_req, res) => {
   }
 });
 
-// GET /api/channels/:id
+// GET /api/channels/:id  (accepts a Mongo _id OR a channel slug/name-url)
 router.get('/:id', async (req, res) => {
   try {
-    const ch = await Channel.findById(req.params.id);
+    const ch = await Channel.findByIdOrSlug(req.params.id);
     if (!ch) return res.status(404).json({ success: false, message: 'Not found' });
     const obj = ch.toObject();
     obj.reportCount = (obj.reports || []).length;
@@ -74,8 +74,9 @@ router.post('/', requireAdmin, async (req, res) => {
     if (!name) return res.status(400).json({ success: false, message: 'name is required' });
     if (!streams || !streams.length) return res.status(400).json({ success: false, message: 'at least one stream is required' });
     const last = await Channel.findOne().sort({ order: -1 });
+    const slug = await Channel.generateUniqueSlug(name);
     const ch = await Channel.create({
-      name, logo: logo || '', description: description || '',
+      name, slug, logo: logo || '', description: description || '',
       country: country || '', language: language || '',
       category: category || 'Other',
       tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()).filter(Boolean) : []),
@@ -97,6 +98,13 @@ router.put('/:id', requireAdmin, async (req, res) => {
       tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()).filter(Boolean) : []),
       streams, active, featured, updatedAt: new Date(),
     };
+    if (name) {
+      const existing = await Channel.findById(req.params.id);
+      // only regenerate the slug if the name actually changed (or it never had one)
+      if (existing && (existing.name !== name || !existing.slug)) {
+        update.slug = await Channel.generateUniqueSlug(name, req.params.id);
+      }
+    }
     const ch = await Channel.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
     if (!ch) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, channel: ch });
@@ -109,7 +117,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
 router.post('/:id/report', async (req, res) => {
   try {
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
-    const ch = await Channel.findById(req.params.id);
+    const ch = await Channel.findByIdOrSlug(req.params.id);
     if (!ch) return res.status(404).json({ success: false, message: 'Not found' });
     const already = ch.reports.some(r => r.ip === ip);
     if (already) return res.json({ success: true, alreadyReported: true, count: ch.reports.length });
