@@ -3,7 +3,7 @@ const { mongoose } = require('../lib/mongo');
 const StreamSchema = new mongoose.Schema({
   url:       { type: String, required: true },
   label:     { type: String, default: 'Server 1' },
-  type:      { type: String, default: 'auto', enum: ['auto', 'hls', 'dash', 'mp4'] },
+  type:      { type: String, default: 'auto', enum: ['auto', 'hls', 'dash', 'mp4', 'ts'] },
   referer:   { type: String, default: '' },
   origin:    { type: String, default: '' },
   userAgent: { type: String, default: '' },
@@ -33,7 +33,7 @@ const ChannelSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   country:     { type: String, default: '' },
   language:    { type: String, default: '' },
-  category:    { type: String, default: 'Other' },
+  categories:  { type: [String], default: ['Other'] },
   tags:        { type: [String], default: [] },
   streams:     { type: [StreamSchema], default: [] },
   reports:     { type: [ReportSchema], default: [] },
@@ -45,7 +45,7 @@ const ChannelSchema = new mongoose.Schema({
 });
 
 ChannelSchema.index({ name: 1 });
-ChannelSchema.index({ category: 1 });
+ChannelSchema.index({ categories: 1 });
 ChannelSchema.index({ country: 1 });
 ChannelSchema.index({ active: 1, order: 1 });
 
