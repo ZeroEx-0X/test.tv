@@ -15,8 +15,18 @@ router.get('/channels', async (req, res) => {
     if (language && language !== '__all__') filter.language = language;
     if (search) filter.name = { $regex: search, $options: 'i' };
     const channels = await Channel.find(filter).sort({ order: 1, name: 1 });
+
+    // backfill: older channels created before slugs existed won't have one yet
+    for (const c of channels) {
+      if (!c.slug) {
+        c.slug = await Channel.generateUniqueSlug(c.name, c._id);
+        await c.save();
+      }
+    }
+
     res.json(channels.map(c => ({
       _id: c._id,
+      slug: c.slug,
       name: c.name,
       logo: c.logo,
       country: c.country,
