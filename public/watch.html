@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -162,6 +163,7 @@ let CHANNEL_NAME = '';
 let currentServerIdx = 0;
 let hlsPlayer = null;
 let dashPlayer = null;
+let tsPlayer = null;
 let isMuted = false;
 let fsControlsTimer = null;
 let failoverTimer = null;
@@ -306,6 +308,7 @@ function detectType(stream) {
   const url = stream.url.toLowerCase();
   if (url.includes('.m3u8') || url.includes('m3u8')) return 'hls';
   if (url.includes('.mpd') || url.includes('mpd')) return 'dash';
+  if (url.includes('.ts')) return 'ts';
   return 'mp4';
 }
 
@@ -327,6 +330,7 @@ function loadStream(stream, usingProxy = false) {
   // Cleanup previous players
   if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
   if (dashPlayer) { dashPlayer.reset(); dashPlayer = null; }
+  if (tsPlayer) { tsPlayer.destroy(); tsPlayer = null; }
   video.src = '';
   clearTimeout(failoverTimer);
 
@@ -378,6 +382,21 @@ function loadStream(stream, usingProxy = false) {
     dashPlayer.initialize(video, url, true);
     dashPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => { clearTimeout(failoverTimer); hideLoader(); });
     dashPlayer.on(dashjs.MediaPlayer.events.ERROR, onFatal);
+  } else if (type === 'ts') {
+    if (window.mpegts && mpegts.isSupported()) {
+      tsPlayer = mpegts.createPlayer({ type: 'mpegts', isLive: true, url });
+      tsPlayer.attachMediaElement(video);
+      tsPlayer.load();
+      tsPlayer.play().catch(() => {});
+      tsPlayer.on(mpegts.Events.ERROR, onFatal);
+      video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
+    } else {
+      // very old/unsupported browser — fall back to a direct <video> src attempt
+      video.src = url;
+      video.play().catch(()=>{});
+      video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
+      video.addEventListener('error', onFatal, { once: true });
+    }
   } else {
     video.src = url;
     video.play().catch(()=>{});
@@ -466,7 +485,7 @@ async function init() {
 
     // Populate channel info
     document.getElementById('ch-name').textContent = ch.name;
-    if (ch.category) document.getElementById('ch-cat').textContent = ch.category;
+    if (ch.categories && ch.categories.length) document.getElementById('ch-cat').textContent = ch.categories.join(', ');
     if (ch.country) document.getElementById('ch-country').innerHTML = `<i class="fas fa-globe mr-1"></i>${ch.country}`;
     if (ch.language) document.getElementById('ch-lang').innerHTML = `<i class="fas fa-language mr-1"></i>${ch.language}`;
     if (ch.logo) {
@@ -489,8 +508,10 @@ async function init() {
     buildServerBtns();
 
     // Related channels: same category first, then every other channel below it
-    const sameCategory = all.filter(c => c.category === ch.category && String(c._id) !== realId);
-    const others = all.filter(c => c.category !== ch.category && String(c._id) !== realId);
+    const myCats = ch.categories && ch.categories.length ? ch.categories : ['Other'];
+    const hasSharedCategory = (c) => (c.categories || []).some(cat => myCats.includes(cat));
+    const sameCategory = all.filter(c => hasSharedCategory(c) && String(c._id) !== realId);
+    const others = all.filter(c => !hasSharedCategory(c) && String(c._id) !== realId);
     const related = [...sameCategory, ...others];
     const list = document.getElementById('channels-list');
     if (!related.length) {
