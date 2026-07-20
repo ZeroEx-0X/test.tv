@@ -4,12 +4,19 @@ const { requireAdmin } = require('../middlewares/auth');
 
 const router = Router();
 
+// Accepts an array as-is, or splits a comma-separated string into a trimmed array
+function toArray(val) {
+  if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
+  if (val) return String(val).split(',').map(v => v.trim()).filter(Boolean);
+  return [];
+}
+
 // GET /api/channels
 router.get('/', async (req, res) => {
   try {
     const { category, country, language, search, active } = req.query;
     const filter = {};
-    if (category && category !== '__all__') filter.category = category;
+    if (category && category !== '__all__') filter.$or = [{ categories: category }, { category }];
     if (country && country !== '__all__') filter.country = country;
     if (language && language !== '__all__') filter.language = language;
     if (active !== undefined) filter.active = active === 'true';
@@ -24,13 +31,14 @@ router.get('/', async (req, res) => {
 // GET /api/channels/meta
 router.get('/meta', async (_req, res) => {
   try {
-    const [categories, countries, languages] = await Promise.all([
+    const [categories, legacyCategories, countries, languages] = await Promise.all([
+      Channel.distinct('categories'),
       Channel.distinct('category'),
       Channel.distinct('country'),
       Channel.distinct('language'),
     ]);
     res.json({
-      categories: categories.filter(Boolean).sort(),
+      categories: [...new Set([...categories, ...legacyCategories])].filter(Boolean).sort(),
       countries: countries.filter(Boolean).sort(),
       languages: languages.filter(Boolean).sort(),
     });
@@ -70,16 +78,17 @@ router.get('/:id', async (req, res) => {
 // POST /api/channels
 router.post('/', requireAdmin, async (req, res) => {
   try {
-    const { name, logo, description, country, language, category, tags, streams, active, featured } = req.body;
+    const { name, logo, description, country, language, category, categories, tags, streams, active, featured } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'name is required' });
     if (!streams || !streams.length) return res.status(400).json({ success: false, message: 'at least one stream is required' });
     const last = await Channel.findOne().sort({ order: -1 });
     const slug = await Channel.generateUniqueSlug(name);
+    const catList = toArray(categories !== undefined ? categories : category);
     const ch = await Channel.create({
       name, slug, logo: logo || '', description: description || '',
       country: country || '', language: language || '',
-      category: category || 'Other',
-      tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()).filter(Boolean) : []),
+      categories: catList.length ? catList : ['Other'],
+      tags: toArray(tags),
       streams, active: active !== false, featured: !!featured,
       order: last ? (last.order || 0) + 1 : 0,
     });
@@ -92,12 +101,16 @@ router.post('/', requireAdmin, async (req, res) => {
 // PUT /api/channels/:id
 router.put('/:id', requireAdmin, async (req, res) => {
   try {
-    const { name, logo, description, country, language, category, tags, streams, active, featured } = req.body;
+    const { name, logo, description, country, language, category, categories, tags, streams, active, featured } = req.body;
     const update = {
-      name, logo, description, country, language, category,
-      tags: Array.isArray(tags) ? tags : (tags ? String(tags).split(',').map(t => t.trim()).filter(Boolean) : []),
+      name, logo, description, country, language,
+      tags: toArray(tags),
       streams, active, featured, updatedAt: new Date(),
     };
+    if (categories !== undefined || category !== undefined) {
+      const catList = toArray(categories !== undefined ? categories : category);
+      update.categories = catList.length ? catList : ['Other'];
+    }
     if (name) {
       const existing = await Channel.findById(req.params.id);
       // only regenerate the slug if the name actually changed (or it never had one)
