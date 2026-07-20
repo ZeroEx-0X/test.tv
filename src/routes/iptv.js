@@ -10,18 +10,25 @@ router.get('/channels', async (req, res) => {
   try {
     const { category, country, language, search } = req.query;
     const filter = { active: true };
-    if (category && category !== '__all__') filter.category = category;
+    if (category && category !== '__all__') filter.$or = [{ categories: category }, { category }];
     if (country && country !== '__all__') filter.country = country;
     if (language && language !== '__all__') filter.language = language;
     if (search) filter.name = { $regex: search, $options: 'i' };
     const channels = await Channel.find(filter).sort({ order: 1, name: 1 });
 
-    // backfill: older channels created before slugs existed won't have one yet
+    // backfill: older channels created before slugs/categories existed won't have them yet
     for (const c of channels) {
+      let needsSave = false;
       if (!c.slug) {
         c.slug = await Channel.generateUniqueSlug(c.name, c._id);
-        await c.save();
+        needsSave = true;
       }
+      if (!c.categories || !c.categories.length) {
+        const legacy = c._doc && c._doc.category;
+        c.categories = legacy ? [legacy] : ['Other'];
+        needsSave = true;
+      }
+      if (needsSave) await c.save();
     }
 
     res.json(channels.map(c => ({
@@ -31,7 +38,7 @@ router.get('/channels', async (req, res) => {
       logo: c.logo,
       country: c.country,
       language: c.language,
-      category: c.category,
+      categories: c.categories,
       featured: c.featured,
       streams: c.streams,
     })));
@@ -43,13 +50,14 @@ router.get('/channels', async (req, res) => {
 // GET /api/iptv/meta
 router.get('/meta', async (_req, res) => {
   try {
-    const [categories, countries, languages] = await Promise.all([
+    const [categories, legacyCategories, countries, languages] = await Promise.all([
+      Channel.distinct('categories', { active: true }),
       Channel.distinct('category', { active: true }),
       Channel.distinct('country', { active: true }),
       Channel.distinct('language', { active: true }),
     ]);
     res.json({
-      categories: categories.filter(Boolean).sort(),
+      categories: [...new Set([...categories, ...legacyCategories])].filter(Boolean).sort(),
       countries: countries.filter(Boolean).sort(),
       languages: languages.filter(Boolean).sort(),
     });
