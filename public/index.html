@@ -165,9 +165,10 @@ function showToast(msg) {
 
 function cardHTML(ch) {
   const faved = getFavs().includes(String(ch._id));
+  const cats = (ch.categories && ch.categories.length) ? ch.categories : ['Other'];
   return `<div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5"
     data-id="${ch._id}" data-name="${(ch.name||'').replace(/"/g,'&quot;')}"
-    data-category="${ch.category||'Other'}" data-country="${ch.country||''}" data-language="${ch.language||''}"
+    data-category="|${cats.join('|')}|" data-country="${ch.country||''}" data-language="${ch.language||''}"
     onclick="location.href='/watch/${ch.slug || ch._id}'">
     <button class="fav-btn" onclick="toggleFav('${ch._id}','${(ch.name||'').replace(/'/g,"\\'")}',event)" title="Favorite" style="color:${faved?'#ef4444':''}">
       <i class="fas fa-heart"></i>
@@ -178,7 +179,7 @@ function cardHTML(ch) {
         : `<span class="text-[8px] font-bold text-red-500">TV</span>`}
     </div>
     <span class="text-[9px] font-semibold text-gray-300 line-clamp-2 leading-tight w-full">${ch.name}</span>
-    ${ch.category ? `<span class="text-[8px] text-gray-600 truncate w-full">${ch.category}</span>` : ''}
+    <span class="text-[8px] text-gray-600 truncate w-full">${cats.join(', ')}</span>
   </div>`;
 }
 
@@ -192,11 +193,11 @@ function filterChannels() {
   let visible = 0;
   cards.forEach(card => {
     const name = (card.dataset.name || '').toLowerCase();
-    const cat = card.dataset.category || '';
+    const cat = card.dataset.category || '||'; // pipe-delimited, e.g. "|News|Sports|"
     const country = card.dataset.country || '';
     const lang = card.dataset.language || '';
     const matchSearch = !searchQuery || name.includes(searchQuery) || cat.toLowerCase().includes(searchQuery) || country.toLowerCase().includes(searchQuery);
-    const matchCat = activeCategory === 'All' || cat === activeCategory;
+    const matchCat = activeCategory === 'All' || cat.includes('|' + activeCategory + '|');
     const matchCountry = !countryFilter || country === countryFilter;
     const matchLang = !langFilter || lang === langFilter;
     const show = matchSearch && matchCat && matchCountry && matchLang;
