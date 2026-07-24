@@ -9,7 +9,7 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;}
+    body{background:#030303;color:#fff;font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
     ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:#1a1a1a;border-radius:10px;}
     .glass{background:rgba(10,10,10,0.95);border:1px solid #1a1a1a;}
     .sidebar{width:220px;min-height:100vh;background:#060606;border-right:1px solid #141414;flex-shrink:0;}
@@ -54,7 +54,8 @@
     .ch-row-head{background:#050505;border-bottom:1px solid #1a1a1a;font-size:10px;font-weight:700;color:#444;letter-spacing:0.08em;text-transform:uppercase;}
     /* Mobile: card layout */
     @media(max-width:767px){
-      .sidebar{display:none;}
+      .sidebar{display:none !important;}
+      .flex.min-h-screen{display:block !important;}
       .ch-row-head{display:none;}
       .ch-row{grid-template-columns:44px 1fr auto;gap:8px;padding:10px 12px;position:relative;}
       .ch-row .col-cat,.ch-row .col-srvs,.ch-row .col-status{display:none;}
