@@ -88,6 +88,9 @@ function fetchWithRedirect(url, extraHeaders = {}, redirectCount = 0) {
       timeout: 15000,
     };
     const req = lib.request(opts, (upstream) => {
+      // Connection succeeded — this is a live stream that can run for hours,
+      // so stop the inactivity timeout from killing it mid-playback.
+      req.setTimeout(0);
       if ([301, 302, 303, 307, 308].includes(upstream.statusCode) && upstream.headers.location) {
         const location = upstream.headers.location;
         const nextUrl = location.startsWith('http') ? location : new URL(location, url).toString();
