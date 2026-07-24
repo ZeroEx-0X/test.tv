@@ -413,11 +413,30 @@ function loadStream(stream, usingProxy = false) {
     dashPlayer.on(dashjs.MediaPlayer.events.ERROR, onFatal);
   } else if (type === 'ts') {
     if (window.mpegts && mpegts.isSupported()) {
-      let reconnectAttempts = 0;
+      let reconnectPending = false;
+      let attempts = 0;
+
+      const reconnect = () => {
+        if (myGen !== streamGeneration || reconnectPending) return; // never stack multiple reconnects
+        reconnectPending = true;
+        attempts++;
+        const delay = Math.min(1000 * attempts, 6000);
+        setTimeout(() => { if (myGen === streamGeneration) startTsPlayer(); }, delay);
+      };
 
       const startTsPlayer = () => {
         if (myGen !== streamGeneration) return; // a newer channel/stream took over — stop
+        reconnectPending = false;
         if (tsPlayer) { try { tsPlayer.unload(); tsPlayer.detachMediaElement(); tsPlayer.destroy(); } catch(_) {} tsPlayer = null; }
+
+        // We're actively trying to (re)connect — give this attempt the full
+        // failover window instead of letting a stale timer cut it short.
+        clearTimeout(failoverTimer);
+        if (STREAMS.length > 1) {
+          failoverTimer = setTimeout(() => {
+            if (!video.readyState || video.readyState < 3) tryNextServer();
+          }, FAILOVER_TIMEOUT);
+        }
 
         tsPlayer = mpegts.createPlayer(
           { type: 'mpegts', isLive: true, url, cors: true },
@@ -441,26 +460,24 @@ function loadStream(stream, usingProxy = false) {
         tsPlayer.attachMediaElement(video);
         tsPlayer.load();
         tsPlayer.play().catch(() => {});
-        reconnectAttempts = 0;
 
-        tsPlayer.on(mpegts.Events.ERROR, () => scheduleReconnect());
+        tsPlayer.on(mpegts.Events.ERROR, (errType) => {
+          // Only force a full reconnect on a genuine connection loss.
+          // Media/mux glitches are usually transient — mpegts.js recovers
+          // from those on its own, and reconnecting on every one of them
+          // is what caused the player to thrash and never stabilize.
+          if (errType === mpegts.ErrorTypes.NETWORK_ERROR) reconnect();
+        });
       };
 
-      function scheduleReconnect() {
-        if (myGen !== streamGeneration) return;
-        reconnectAttempts++;
-        const delay = Math.min(800 * reconnectAttempts, 5000);
-        setTimeout(() => { if (myGen === streamGeneration) startTsPlayer(); }, delay);
-      }
-
       startTsPlayer();
-      video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
+      video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); attempts = 0; }, { once: true });
 
       // The real symptom reported: the upstream feed pauses/closes, mpegts.js
       // calls MediaSource.endOfStream(), the <video> plays to the "end" of the
       // buffer and fires `ended` — a genuinely live TS feed should never end,
-      // so treat `ended` as a disconnect and reconnect immediately.
-      video.addEventListener('ended', () => { if (myGen === streamGeneration) scheduleReconnect(); });
+      // so treat `ended` as a disconnect and reconnect.
+      video.addEventListener('ended', () => { if (myGen === streamGeneration) reconnect(); });
 
       // Backup watchdog: catches silent stalls that don't fire `ended` or ERROR.
       let lastTime = -1, stuckChecks = 0;
@@ -469,7 +486,7 @@ function loadStream(stream, usingProxy = false) {
         if (video.paused || video.seeking) return;
         if (video.currentTime === lastTime) {
           stuckChecks++;
-          if (stuckChecks >= 2) { stuckChecks = 0; startTsPlayer(); } // ~6s stuck
+          if (stuckChecks >= 3) { stuckChecks = 0; reconnect(); } // ~9s stuck
         } else {
           stuckChecks = 0;
         }
