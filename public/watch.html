@@ -164,6 +164,7 @@ let currentServerIdx = 0;
 let hlsPlayer = null;
 let dashPlayer = null;
 let tsPlayer = null;
+let stallWatchdog = null;
 let isMuted = false;
 let fsControlsTimer = null;
 let failoverTimer = null;
@@ -355,6 +356,7 @@ function loadStream(stream, usingProxy = false) {
   if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
   if (dashPlayer) { dashPlayer.reset(); dashPlayer = null; }
   if (tsPlayer) { tsPlayer.destroy(); tsPlayer = null; }
+  clearInterval(stallWatchdog); stallWatchdog = null;
   video.src = '';
   videoWrap.style.aspectRatio = '16 / 9';
   clearTimeout(failoverTimer);
@@ -409,12 +411,38 @@ function loadStream(stream, usingProxy = false) {
     dashPlayer.on(dashjs.MediaPlayer.events.ERROR, onFatal);
   } else if (type === 'ts') {
     if (window.mpegts && mpegts.isSupported()) {
-      tsPlayer = mpegts.createPlayer({ type: 'mpegts', isLive: true, url });
-      tsPlayer.attachMediaElement(video);
-      tsPlayer.load();
-      tsPlayer.play().catch(() => {});
-      tsPlayer.on(mpegts.Events.ERROR, onFatal);
+      const startTsPlayer = () => {
+        if (tsPlayer) { try { tsPlayer.destroy(); } catch(_) {} tsPlayer = null; }
+        tsPlayer = mpegts.createPlayer({ type: 'mpegts', isLive: true, url }, {
+          enableStashBuffer: false,
+          liveBufferLatencyChasing: true,
+          autoCleanupSourceBuffer: true,
+        });
+        tsPlayer.attachMediaElement(video);
+        tsPlayer.load();
+        tsPlayer.play().catch(() => {});
+        tsPlayer.on(mpegts.Events.ERROR, () => {
+          // Connection to the panel dropped — reconnect automatically instead
+          // of leaving the viewer stuck needing a manual refresh.
+          setTimeout(startTsPlayer, 1000);
+        });
+      };
+      startTsPlayer();
       video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
+
+      // Watchdog: if playback stops advancing for a while (silent stall,
+      // no ERROR event fired), reconnect automatically.
+      let lastTime = -1, stuckChecks = 0;
+      stallWatchdog = setInterval(() => {
+        if (video.paused) return;
+        if (video.currentTime === lastTime) {
+          stuckChecks++;
+          if (stuckChecks >= 3) { stuckChecks = 0; startTsPlayer(); } // ~9s stuck
+        } else {
+          stuckChecks = 0;
+        }
+        lastTime = video.currentTime;
+      }, 3000);
     } else {
       // very old/unsupported browser — fall back to a direct <video> src attempt
       video.src = url;
