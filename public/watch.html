@@ -161,6 +161,7 @@ let realId = null; // actual Mongo _id, filled in once the channel loads — use
 let STREAMS = [];
 let CHANNEL_NAME = '';
 let currentServerIdx = 0;
+let streamGeneration = 0; // bumped on every loadStream() call; invalidates old reconnect timers
 let hlsPlayer = null;
 let dashPlayer = null;
 let tsPlayer = null;
@@ -351,11 +352,12 @@ function buildProxyUrl(stream) {
 function loadStream(stream, usingProxy = false) {
   if (!stream || !stream.url) { showLoader('No stream URL available.'); return; }
   showLoader('Loading ' + (stream.label || 'stream') + '...');
+  const myGen = ++streamGeneration;
 
   // Cleanup previous players
   if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
   if (dashPlayer) { dashPlayer.reset(); dashPlayer = null; }
-  if (tsPlayer) { tsPlayer.destroy(); tsPlayer = null; }
+  if (tsPlayer) { try { tsPlayer.unload(); tsPlayer.detachMediaElement(); tsPlayer.destroy(); } catch(_) {} tsPlayer = null; }
   clearInterval(stallWatchdog); stallWatchdog = null;
   video.src = '';
   videoWrap.style.aspectRatio = '16 / 9';
@@ -411,33 +413,63 @@ function loadStream(stream, usingProxy = false) {
     dashPlayer.on(dashjs.MediaPlayer.events.ERROR, onFatal);
   } else if (type === 'ts') {
     if (window.mpegts && mpegts.isSupported()) {
+      let reconnectAttempts = 0;
+
       const startTsPlayer = () => {
-        if (tsPlayer) { try { tsPlayer.destroy(); } catch(_) {} tsPlayer = null; }
-        tsPlayer = mpegts.createPlayer({ type: 'mpegts', isLive: true, url }, {
-          enableStashBuffer: false,
-          liveBufferLatencyChasing: true,
-          autoCleanupSourceBuffer: true,
-        });
+        if (myGen !== streamGeneration) return; // a newer channel/stream took over — stop
+        if (tsPlayer) { try { tsPlayer.unload(); tsPlayer.detachMediaElement(); tsPlayer.destroy(); } catch(_) {} tsPlayer = null; }
+
+        tsPlayer = mpegts.createPlayer(
+          { type: 'mpegts', isLive: true, url, cors: true },
+          {
+            // Best-practice config for a raw Xtream/MAG-style live TS feed:
+            enableWorker: true,
+            enableStashBuffer: false,   // don't wait to build a buffer — start pushing ASAP (live)
+            stashInitialSize: 128,
+            liveBufferLatencyChasing: true,   // keep skipping forward if we fall behind live edge
+            liveBufferLatencyMaxLatency: 4.0,
+            liveBufferLatencyMinRemain: 0.5,
+            lazyLoad: false,             // never pause the loader — this is not VOD, there's no "enough buffered"
+            lazyLoadMaxDuration: 0,
+            autoCleanupSourceBuffer: true,     // stop the buffer growing forever on a 24/7 stream
+            autoCleanupMaxBackwardDuration: 20,
+            autoCleanupMinBackwardDuration: 10,
+            reuseRedirectedURL: true,
+            fixAudioTimestampGap: false,
+          }
+        );
         tsPlayer.attachMediaElement(video);
         tsPlayer.load();
         tsPlayer.play().catch(() => {});
-        tsPlayer.on(mpegts.Events.ERROR, () => {
-          // Connection to the panel dropped — reconnect automatically instead
-          // of leaving the viewer stuck needing a manual refresh.
-          setTimeout(startTsPlayer, 1000);
-        });
+        reconnectAttempts = 0;
+
+        tsPlayer.on(mpegts.Events.ERROR, () => scheduleReconnect());
       };
+
+      function scheduleReconnect() {
+        if (myGen !== streamGeneration) return;
+        reconnectAttempts++;
+        const delay = Math.min(800 * reconnectAttempts, 5000);
+        setTimeout(() => { if (myGen === streamGeneration) startTsPlayer(); }, delay);
+      }
+
       startTsPlayer();
       video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); }, { once: true });
 
-      // Watchdog: if playback stops advancing for a while (silent stall,
-      // no ERROR event fired), reconnect automatically.
+      // The real symptom reported: the upstream feed pauses/closes, mpegts.js
+      // calls MediaSource.endOfStream(), the <video> plays to the "end" of the
+      // buffer and fires `ended` — a genuinely live TS feed should never end,
+      // so treat `ended` as a disconnect and reconnect immediately.
+      video.addEventListener('ended', () => { if (myGen === streamGeneration) scheduleReconnect(); });
+
+      // Backup watchdog: catches silent stalls that don't fire `ended` or ERROR.
       let lastTime = -1, stuckChecks = 0;
       stallWatchdog = setInterval(() => {
-        if (video.paused) return;
+        if (myGen !== streamGeneration) { clearInterval(stallWatchdog); return; }
+        if (video.paused || video.seeking) return;
         if (video.currentTime === lastTime) {
           stuckChecks++;
-          if (stuckChecks >= 3) { stuckChecks = 0; startTsPlayer(); } // ~9s stuck
+          if (stuckChecks >= 2) { stuckChecks = 0; startTsPlayer(); } // ~6s stuck
         } else {
           stuckChecks = 0;
         }
