@@ -169,11 +169,31 @@ let fsControlsTimer = null;
 let failoverTimer = null;
 const FAILOVER_TIMEOUT = 20000;
 const video = document.getElementById('video-player');
+// Match the frame's aspect-ratio to the stream's real dimensions once known,
+// instead of always forcing a 16:9 box (which letterboxes non-16:9 streams).
+video.addEventListener('loadedmetadata', updatePlayerAspectRatio);
+video.addEventListener('resize', updatePlayerAspectRatio);
+function updatePlayerAspectRatio() {
+  if (video.videoWidth && video.videoHeight) {
+    videoWrap.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+  }
+}
 const videoWrap = document.getElementById('video-wrap');
 
 // ── Favorites ─────────────────────────────────────────────────────
 function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } }
 function saveFavs(f) { localStorage.setItem(FAV_KEY, JSON.stringify(f)); }
+
+// Favorite toggle for cards in the "related channels" grid below the player
+function toggleGridFav(id, event) {
+  event.stopPropagation();
+  let f = getFavs();
+  if (f.includes(id)) f = f.filter(x => x !== id);
+  else f.push(id);
+  saveFavs(f);
+  const heart = event.currentTarget.querySelector('i');
+  heart.parentElement.style.color = f.includes(id) ? '#ef4444' : '';
+}
 function updateFavBtn() {
   const on = getFavs().includes(realId);
   document.getElementById('fav-icon').style.color = on ? '#ef4444' : '';
@@ -309,7 +329,11 @@ function detectType(stream) {
   if (url.includes('.m3u8') || url.includes('m3u8')) return 'hls';
   if (url.includes('.mpd') || url.includes('mpd')) return 'dash';
   if (url.includes('.ts')) return 'ts';
-  return 'mp4';
+  if (/\.(mp4|webm|mov|mkv|m4v)(\?|$)/.test(url)) return 'mp4';
+  // No recognizable file extension at all — this is almost always a raw
+  // IPTV/Xtream/MAG-portal live link (e.g. host:port/user/pass/12345),
+  // which streams as MPEG-TS even though the URL has no ".ts" in it.
+  return 'ts';
 }
 
 // ── Build proxy URL explicitly ─────────────────────────────────────
@@ -332,6 +356,7 @@ function loadStream(stream, usingProxy = false) {
   if (dashPlayer) { dashPlayer.reset(); dashPlayer = null; }
   if (tsPlayer) { tsPlayer.destroy(); tsPlayer = null; }
   video.src = '';
+  videoWrap.style.aspectRatio = '16 / 9';
   clearTimeout(failoverTimer);
 
   // Decide URL: proxy if forced/explicit, mixed-content, or retrying
@@ -517,14 +542,22 @@ async function init() {
     if (!related.length) {
       list.innerHTML = '<div class="col-span-full text-center py-10 text-gray-600 text-xs"><i class="fas fa-satellite-dish mb-2 block text-lg"></i>No related channels</div>';
     } else {
-      list.innerHTML = related.map(c => `
-        <div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5" data-id="${c._id}" onclick="location.href='/watch/${c.slug || c._id}'">
+      const favs = getFavs();
+      list.innerHTML = related.map(c => {
+        const cCats = (c.categories && c.categories.length) ? c.categories : ['Other'];
+        const faved = favs.includes(String(c._id));
+        return `
+        <div class="ch-card glass rounded-xl p-2 border border-neutral-900 flex flex-col items-center text-center gap-1.5 relative" data-id="${c._id}" onclick="location.href='/watch/${c.slug || c._id}'">
+          <button onclick="toggleGridFav('${c._id}', event)" title="Favorite" class="absolute top-1 right-1 z-10 text-[10px] p-1" style="color:${faved?'#ef4444':'#555'}">
+            <i class="fas fa-heart"></i>
+          </button>
           <div class="w-10 h-10 bg-white rounded-lg border border-neutral-200/30 flex items-center justify-center p-1 overflow-hidden mt-1">
             ${c.logo ? `<img src="${c.logo}" class="w-full h-full object-contain" onerror="this.src=''"/>` : `<span class="text-[8px] font-bold text-red-500">TV</span>`}
           </div>
           <span class="text-[9px] font-semibold text-gray-300 line-clamp-2 leading-tight">${c.name}</span>
-        </div>`
-      ).join('');
+          <span class="text-[8px] text-gray-600 truncate w-full">${cCats.join(', ')}</span>
+        </div>`;
+      }).join('');
       // Mark current as playing
       document.querySelectorAll(`#channels-list .ch-card[data-id="${realId}"]`).forEach(el => el.classList.add('playing'));
     }
@@ -539,5 +572,10 @@ async function init() {
 
 init();
 </script>
+<a href="https://www.facebook.com/zeroex.0X" target="_blank" rel="noopener"
+   style="position:fixed;bottom:18px;right:18px;z-index:80;background:#1877F2;color:#fff;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);text-decoration:none;font-size:20px;"
+   title="Follow us on Facebook">
+  <i class="fab fa-facebook-f"></i>
+</a>
 </body>
 </html>
