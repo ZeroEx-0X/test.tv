@@ -85,7 +85,7 @@
           <div class="spin-ring"></div>
           <p class="text-[11px] text-gray-500 font-medium" id="loader-text">Loading channel...</p>
         </div>
-        <video id="video-player" playsinline preload="none"></video>
+        <video id="video-player" playsinline muted preload="none"></video>
         <div class="player-controls" id="player-controls">
           <div class="progress-wrap" id="progress-wrap">
             <div class="progress-fill" id="progress-fill" style="width:0%"></div>
@@ -258,7 +258,7 @@ function buildServerBtns() {
   document.getElementById('server-section').style.removeProperty('display');
   const cont = document.getElementById('server-btns');
   cont.innerHTML = STREAMS.map((s, i) =>
-    `<button class="srv-btn ${i===0?'active':''}" onclick="switchServer(${i})" id="srv-${i}">
+    `<button class="srv-btn ${i===currentServerIdx?'active':''}" onclick="switchServer(${i})" id="srv-${i}">
       <i class="fas fa-server mr-1 text-[9px]"></i>${s.label||'Server '+(i+1)}
     </button>`
   ).join('');
@@ -338,6 +338,10 @@ function detectType(stream) {
   return 'ts';
 }
 
+function isRawTsStream(stream) {
+  return detectType(stream) === 'ts';
+}
+
 // ── Build proxy URL explicitly ─────────────────────────────────────
 function buildProxyUrl(stream) {
   const params = new URLSearchParams({ url: stream.url });
@@ -353,6 +357,11 @@ function loadStream(stream, usingProxy = false) {
   if (!stream || !stream.url) { showLoader('No stream URL available.'); return; }
   showLoader('Loading ' + (stream.label || 'stream') + '...');
   const myGen = ++streamGeneration;
+  // Browsers block autoplay when a live source includes audio. Start muted so
+  // the channel can begin without a click; the volume control can unmute it.
+  video.muted = true;
+  isMuted = true;
+  updateVolIcon();
 
   // Cleanup previous players
   if (hlsPlayer) { hlsPlayer.destroy(); hlsPlayer = null; }
@@ -363,8 +372,11 @@ function loadStream(stream, usingProxy = false) {
   videoWrap.style.aspectRatio = '16 / 9';
   clearTimeout(failoverTimer);
 
-  // Decide URL: proxy if forced/explicit, mixed-content, or retrying
-  const url = usingProxy ? buildProxyUrl(stream) : buildStreamUrl(stream);
+  // Raw MAG/Xtream TS endpoints redirect to a tokenized URL and commonly do
+  // not expose CORS headers. Start them through our proxy so mpegts.js receives
+  // the final live response consistently on both HTTP and HTTPS previews.
+  const shouldProxy = usingProxy || stream.useProxy || isRawTsStream(stream) || needsProxy(stream.url);
+  const url = shouldProxy ? buildProxyUrl(stream) : buildStreamUrl(stream);
   const type = detectType(stream);
 
   // auto-failover between servers (only when multiple)
@@ -377,7 +389,7 @@ function loadStream(stream, usingProxy = false) {
   function onFatal() {
     clearTimeout(failoverTimer);
     // Direct failed → silently retry via proxy (CORS/network issue)
-    if (!usingProxy && !url.startsWith('/api/iptv/proxy')) {
+    if (!shouldProxy && !url.startsWith('/api/iptv/proxy')) {
       showLoader('Retrying via server proxy...');
       setTimeout(() => loadStream(stream, true), 800);
       return;
@@ -443,8 +455,11 @@ function loadStream(stream, usingProxy = false) {
           {
             // Best-practice config for a raw Xtream/MAG-style live TS feed:
             enableWorker: true,
-            enableStashBuffer: false,   // don't wait to build a buffer — start pushing ASAP (live)
-            stashInitialSize: 128,
+            // Keep a small initial stash so PAT/PMT and the first keyframe can
+            // arrive together. Disabling this makes some tokenized MAG feeds
+            // fail before MediaSource has enough metadata to initialize.
+            enableStashBuffer: true,
+            stashInitialSize: 384 * 1024,
             liveBufferLatencyChasing: true,   // keep skipping forward if we fall behind live edge
             liveBufferLatencyMaxLatency: 4.0,
             liveBufferLatencyMinRemain: 0.5,
@@ -460,8 +475,24 @@ function loadStream(stream, usingProxy = false) {
         tsPlayer.attachMediaElement(video);
         tsPlayer.load();
         tsPlayer.play().catch(() => {});
+        const markReady = () => {
+          clearTimeout(failoverTimer);
+          hideLoader();
+          attempts = 0;
+        };
+        video.addEventListener('playing', markReady, { once: true });
+        video.addEventListener('canplay', markReady, { once: true });
+        tsPlayer.on(mpegts.Events.MEDIA_INFO, () => {
+          video.play().catch(() => {});
+          // Some live MPEG-TS feeds do not emit canplay consistently even
+          // after MediaSource has received decodable media.
+          setTimeout(() => {
+            if (myGen === streamGeneration && video.readyState >= 2) markReady();
+          }, 1200);
+        });
 
-        tsPlayer.on(mpegts.Events.ERROR, (errType) => {
+        tsPlayer.on(mpegts.Events.ERROR, (errType, errDetail, errInfo) => {
+          console.warn('MPEG-TS player error', { errType, errDetail, errInfo });
           // Only force a full reconnect on a genuine connection loss.
           // Media/mux glitches are usually transient — mpegts.js recovers
           // from those on its own, and reconnecting on every one of them
@@ -471,8 +502,6 @@ function loadStream(stream, usingProxy = false) {
       };
 
       startTsPlayer();
-      video.addEventListener('canplay', () => { clearTimeout(failoverTimer); hideLoader(); attempts = 0; }, { once: true });
-
       // The real symptom reported: the upstream feed pauses/closes, mpegts.js
       // calls MediaSource.endOfStream(), the <video> plays to the "end" of the
       // buffer and fires `ended` — a genuinely live TS feed should never end,
@@ -607,6 +636,12 @@ async function init() {
     } else {
       updateReportBtn(localReported);
     }
+    // Raw MPEG-TS/MAG feeds are handled through the server proxy and are often
+    // more reliable than public HLS mirrors. Prefer one when available so a
+    // valid live feed is not hidden behind several slow/expired mirrors.
+    failedServers = [];
+    const preferredTs = STREAMS.findIndex(stream => detectType(stream) === 'ts');
+    currentServerIdx = preferredTs >= 0 ? preferredTs : 0;
     buildServerBtns();
 
     // Related channels: same category first, then every other channel below it
@@ -639,7 +674,7 @@ async function init() {
       document.querySelectorAll(`#channels-list .ch-card[data-id="${realId}"]`).forEach(el => el.classList.add('playing'));
     }
 
-    if (STREAMS.length > 0) loadStream(STREAMS[0]);
+    if (STREAMS.length > 0) loadStream(STREAMS[currentServerIdx]);
     else showLoader('No streams configured.');
   } catch (err) {
     showLoader('Failed to load channel.');
