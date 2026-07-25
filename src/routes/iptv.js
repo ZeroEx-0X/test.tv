@@ -98,6 +98,9 @@ function fetchWithRedirect(url, extraHeaders = {}, redirectCount = 0) {
         resolve(fetchWithRedirect(nextUrl, extraHeaders, redirectCount + 1));
         return;
       }
+      // Keep the final URL available to callers. MAG/Xtream-style endpoints
+      // commonly redirect to a short-lived token URL before returning TS.
+      upstream.finalUrl = url;
       resolve(upstream);
     });
     req.on('error', reject);
@@ -132,22 +135,27 @@ router.get('/proxy', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache, no-store');
 
-    const isM3U8 = streamUrl.includes('.m3u8') || ct.includes('mpegurl') || ct.includes('m3u');
+    const finalUrl = upstream.finalUrl || streamUrl;
+    const isM3U8 = finalUrl.includes('.m3u8') || ct.includes('mpegurl') || ct.includes('m3u');
     if (isM3U8) {
       let body = '';
       upstream.setEncoding('utf8');
       upstream.on('data', (chunk) => (body += chunk));
       upstream.on('end', () => {
-        const base = streamUrl.substring(0, streamUrl.lastIndexOf('/') + 1);
         const fixed = body.split('\n').map((line) => {
           const trim = line.trim();
-          if (!trim || trim.startsWith('#')) return line;
+          if (!trim) return line;
+          // URI="..." can appear inside #EXT-X-KEY, #EXT-X-MAP, etc. — rewrite
+          // it even on lines that start with '#' (they are not plain segment URLs).
           const uriMatch = line.match(/URI="([^"]+)"/);
           if (uriMatch) {
-            const keyUrl = /^https?:\/\//i.test(uriMatch[1]) ? uriMatch[1] : base + uriMatch[1];
+            // new URL() correctly handles absolute URLs, absolute paths (/foo),
+            // and relative paths (foo) — avoids the double-slash bug with base+trim
+            const keyUrl = new URL(uriMatch[1], finalUrl).toString();
             return line.replace(uriMatch[1], `/api/iptv/proxy?url=${encodeURIComponent(keyUrl)}`);
           }
-          const absUrl = /^https?:\/\//i.test(trim) ? trim : base + trim;
+          if (trim.startsWith('#')) return line;
+          const absUrl = new URL(trim, finalUrl).toString();
           return `/api/iptv/proxy?url=${encodeURIComponent(absUrl)}`;
         }).join('\n');
         res.send(fixed);
