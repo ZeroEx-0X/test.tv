@@ -179,9 +179,17 @@ router.get('/proxy', async (req, res) => {
         res.send(fixed);
       });
       upstream.on('error', () => { if (!res.headersSent) res.status(502).end(); });
-    } else {
-      if (upstream.headers['content-length']) res.setHeader('Content-Length', upstream.headers['content-length']);
+      } else {
+      // Chunked streaming specific headers for mpegts.js / MPEG-TS
+      res.setHeader('Transfer-Encoding', 'chunked');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+      
       upstream.pipe(res);
+      
+      // ক্লায়েন্ট বা প্লেয়ার প্লে বন্ধ করলে প্রক্সি কানেকশন কেটে দিন
+      req.on('close', () => {
+        if (upstream.destroy) upstream.destroy();
+      });
       upstream.on('error', () => { if (!res.headersSent) res.status(502).end(); });
     }
   } catch (err) {
