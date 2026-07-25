@@ -472,29 +472,24 @@ function loadStream(stream, usingProxy = false) {
             if (!video.readyState || video.readyState < 3) tryNextServer();
           }, FAILOVER_TIMEOUT);
         }
-
         tsPlayer = mpegts.createPlayer(
           { type: 'mpegts', isLive: true, url, cors: true },
           {
-            // Best-practice config for a raw Xtream/MAG-style live TS feed:
             enableWorker: true,
-            // Keep a small initial stash so PAT/PMT and the first keyframe can
-            // arrive together. Disabling this makes some tokenized MAG feeds
-            // fail before MediaSource has enough metadata to initialize.
-            enableStashBuffer: true,
-            stashInitialSize: 384 * 1024,
-            liveBufferLatencyChasing: true,   // keep skipping forward if we fall behind live edge
-            liveBufferLatencyMaxLatency: 4.0,
-            liveBufferLatencyMinRemain: 0.5,
-            lazyLoad: false,             // never pause the loader — this is not VOD, there's no "enough buffered"
-            lazyLoadMaxDuration: 0,
-            autoCleanupSourceBuffer: true,     // stop the buffer growing forever on a 24/7 stream
-            autoCleanupMaxBackwardDuration: 20,
-            autoCleanupMinBackwardDuration: 10,
+            enableStashBuffer: false,        // এটি false করলে বাফারিং আটকে না থেকে সাথে সাথে ফ্রেম লোড হবে
+            stashInitialSize: 128 * 1024,
+            liveBufferLatencyChasing: true,
+            liveBufferLatencyMaxLatency: 3.0,
+            liveBufferLatencyMinRemain: 0.2,
+            lazyLoad: false,
+            autoCleanupSourceBuffer: true,
+            autoCleanupMaxBackwardDuration: 15,
+            autoCleanupMinBackwardDuration: 5,
             reuseRedirectedURL: true,
-            fixAudioTimestampGap: false,
+            fixAudioTimestampGap: true
           }
         );
+
         tsPlayer.attachMediaElement(video);
         tsPlayer.load();
         tsPlayer.play().catch(() => { video.muted = true; isMuted = true; updateVolIcon(); tsPlayer.play().catch(()=>{}); });
