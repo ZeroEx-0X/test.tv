@@ -472,21 +472,19 @@ function loadStream(stream, usingProxy = false) {
             if (!video.readyState || video.readyState < 3) tryNextServer();
           }, FAILOVER_TIMEOUT);
         }
-        tsPlayer = mpegts.createPlayer(
+                tsPlayer = mpegts.createPlayer(
           { type: 'mpegts', isLive: true, url, cors: true },
           {
             enableWorker: true,
-            enableStashBuffer: false,        // এটি false করলে বাফারিং আটকে না থেকে সাথে সাথে ফ্রেম লোড হবে
+            enableStashBuffer: false,
             stashInitialSize: 128 * 1024,
             liveBufferLatencyChasing: true,
+            enableFetchEndSeamlessly: false,  // <-- এই লাইনটি অবশ্যই যোগ করবেন (এটি নেটওয়ার্ক স্টল হওয়া আটকাবে)
             liveBufferLatencyMaxLatency: 3.0,
             liveBufferLatencyMinRemain: 0.2,
             lazyLoad: false,
             autoCleanupSourceBuffer: true,
-            autoCleanupMaxBackwardDuration: 15,
-            autoCleanupMinBackwardDuration: 5,
-            reuseRedirectedURL: true,
-            fixAudioTimestampGap: true
+            reuseRedirectedURL: true
           }
         );
 
