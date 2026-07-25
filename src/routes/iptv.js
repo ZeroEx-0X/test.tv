@@ -130,24 +130,24 @@ router.get('/proxy', async (req, res) => {
 
   try {
     const upstream = await fetchWithRedirect(streamUrl, extraHeaders);
-    const ct = upstream.headers['content-type'] || 'application/octet-stream';
-    res.setHeader('Content-Type', ct);
+    const finalUrl = upstream.finalUrl || streamUrl;
+    const ct = upstream.headers['content-type'] || 'video/mp2t';
+    
+    // Global Header Configuration for Proxy
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Cache-Control', 'no-cache, no-store');
 
-    const finalUrl = upstream.finalUrl || streamUrl;
     const isM3U8 = finalUrl.includes('.m3u8') || ct.includes('mpegurl') || ct.includes('m3u');
     const isDash = !isM3U8 && (finalUrl.includes('.mpd') || ct.includes('dash+xml'));
+
     if (isDash) {
-      // Rewrite relative <BaseURL> and schemeIdUri references so dash.js can
-      // resolve segment URLs correctly when the MPD is served through our proxy.
       res.setHeader('Content-Type', 'application/dash+xml');
       let body = '';
       upstream.setEncoding('utf8');
       upstream.on('data', chunk => (body += chunk));
       upstream.on('end', () => {
         const fixed = body
-          // Rewrite <BaseURL>relative/</BaseURL> → absolute proxy URL
           .replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (_, href) => {
             const abs = new URL(href, finalUrl).toString();
             return `<BaseURL>/api/iptv/proxy?url=${encodeURIComponent(abs)}</BaseURL>`;
@@ -156,6 +156,7 @@ router.get('/proxy', async (req, res) => {
       });
       upstream.on('error', () => { if (!res.headersSent) res.status(502).end(); });
     } else if (isM3U8) {
+      res.setHeader('Content-Type', ct);
       let body = '';
       upstream.setEncoding('utf8');
       upstream.on('data', (chunk) => (body += chunk));
@@ -163,12 +164,8 @@ router.get('/proxy', async (req, res) => {
         const fixed = body.split('\n').map((line) => {
           const trim = line.trim();
           if (!trim) return line;
-          // URI="..." can appear inside #EXT-X-KEY, #EXT-X-MAP, etc. — rewrite
-          // it even on lines that start with '#' (they are not plain segment URLs).
           const uriMatch = line.match(/URI="([^"]+)"/);
           if (uriMatch) {
-            // new URL() correctly handles absolute URLs, absolute paths (/foo),
-            // and relative paths (foo) — avoids the double-slash bug with base+trim
             const keyUrl = new URL(uriMatch[1], finalUrl).toString();
             return line.replace(uriMatch[1], `/api/iptv/proxy?url=${encodeURIComponent(keyUrl)}`);
           }
@@ -179,14 +176,13 @@ router.get('/proxy', async (req, res) => {
         res.send(fixed);
       });
       upstream.on('error', () => { if (!res.headersSent) res.status(502).end(); });
-      } else {
-      // Chunked streaming specific headers for mpegts.js / MPEG-TS
-      res.setHeader('Transfer-Encoding', 'chunked');
-      res.setHeader('Access-Control-Allow-Headers', '*');
+    } else {
+      // Specific Headers for .TS Streams (MPEG-TS Live Streaming)
+      res.setHeader('Content-Type', 'video/mp2t');
+      res.setHeader('Connection', 'keep-alive');
       
       upstream.pipe(res);
       
-      // ক্লায়েন্ট বা প্লেয়ার প্লে বন্ধ করলে প্রক্সি কানেকশন কেটে দিন
       req.on('close', () => {
         if (upstream.destroy) upstream.destroy();
       });
