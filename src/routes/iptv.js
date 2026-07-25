@@ -137,7 +137,25 @@ router.get('/proxy', async (req, res) => {
 
     const finalUrl = upstream.finalUrl || streamUrl;
     const isM3U8 = finalUrl.includes('.m3u8') || ct.includes('mpegurl') || ct.includes('m3u');
-    if (isM3U8) {
+    const isDash = !isM3U8 && (finalUrl.includes('.mpd') || ct.includes('dash+xml'));
+    if (isDash) {
+      // Rewrite relative <BaseURL> and schemeIdUri references so dash.js can
+      // resolve segment URLs correctly when the MPD is served through our proxy.
+      res.setHeader('Content-Type', 'application/dash+xml');
+      let body = '';
+      upstream.setEncoding('utf8');
+      upstream.on('data', chunk => (body += chunk));
+      upstream.on('end', () => {
+        const fixed = body
+          // Rewrite <BaseURL>relative/</BaseURL> → absolute proxy URL
+          .replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (_, href) => {
+            const abs = new URL(href, finalUrl).toString();
+            return `<BaseURL>/api/iptv/proxy?url=${encodeURIComponent(abs)}</BaseURL>`;
+          });
+        res.send(fixed);
+      });
+      upstream.on('error', () => { if (!res.headersSent) res.status(502).end(); });
+    } else if (isM3U8) {
       let body = '';
       upstream.setEncoding('utf8');
       upstream.on('data', (chunk) => (body += chunk));
