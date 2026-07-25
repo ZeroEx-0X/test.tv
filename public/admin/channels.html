@@ -116,7 +116,7 @@
         <h2 class="text-xl font-black">Channels</h2>
         <p class="text-xs text-gray-600 mt-0.5" id="ch-count-label">Loading...</p>
       </div>
-      <button onclick="openModal()" class="btn-red flex items-center gap-2">
+      <button onclick="openModal()" class="btn-red items-center gap-2 hidden md:flex">
         <i class="fas fa-plus text-[11px]"></i>New Channel
       </button>
     </div>
@@ -235,6 +235,11 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile FAB: Add Channel -->
+<button onclick="openModal()" class="md:hidden fixed bottom-6 right-5 z-50 w-14 h-14 rounded-full bg-red-500 shadow-lg shadow-red-500/40 flex items-center justify-center text-white active:scale-95 transition-transform">
+  <i class="fas fa-plus text-lg"></i>
+</button>
 
 <script>
 let channels = [];
@@ -514,7 +519,6 @@ async function loadChannels() {
           <p class="font-semibold text-[12px] truncate">${ch.name}</p>
           <p class="text-[10px] text-gray-600 truncate">
             ${(ch.categories||[]).join(', ')}${ch.country?' · '+ch.country:''}
-            <span class="badge ${ch.active?'badge-green':'badge-red'} ml-1 md:hidden" style="padding:1px 6px;">${ch.active?'Active':'Hidden'}</span>
             ${reportCount > 0 ? `<span class="badge badge-yellow ml-1 md:hidden"><i class="fas fa-flag text-[8px] mr-0.5"></i>${reportCount}</span>` : ''}
           </p>
         </div>
@@ -538,8 +542,8 @@ async function loadChannels() {
           <button onclick='openModal(JSON.parse(this.dataset.ch))' data-ch='${safeJSON}' class="text-gray-600 hover:text-white transition p-1.5 rounded-lg hover:bg-neutral-800" title="Edit">
             <i class="fas fa-edit text-[11px]"></i>
           </button>
-          <button onclick="toggleActive('${ch._id}')" class="text-gray-600 hover:text-white transition p-1.5 rounded-lg hover:bg-neutral-800" title="${ch.active?'Hide':'Show'}">
-            <i class="fas fa-${ch.active?'eye-slash':'eye'} text-[11px]"></i>
+          <button onclick="toggleActive('${ch._id}')" class="${ch.active?'text-green-500 hover:text-red-400 hover:bg-red-500/10':'text-red-500 hover:text-green-400 hover:bg-green-500/10'} transition p-1.5 rounded-lg" title="${ch.active?'Active — click to hide':'Hidden — click to show'}">
+            <i class="fas fa-${ch.active?'eye':'eye-slash'} text-[11px]"></i>
           </button>
           <button onclick="deleteChannel('${ch._id}','${(ch.name||'').replace(/'/g,"\\'")}')\"" class="text-gray-600 hover:text-red-500 transition p-1.5 rounded-lg hover:bg-red-500/10" title="Delete">
             <i class="fas fa-trash text-[11px]"></i>
