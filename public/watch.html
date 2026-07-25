@@ -122,6 +122,10 @@
             <i class="fas fa-heart text-[10px]" id="fav-icon"></i>
             <span class="hidden sm:inline text-[10px] font-semibold" id="fav-label">Save</span>
           </button>
+          <button id="share-btn" onclick="shareChannel()" class="text-xs bg-neutral-950 border border-neutral-800 hover:border-blue-900 px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-gray-500 hover:text-blue-400">
+            <i class="fas fa-share-nodes text-[10px]"></i>
+            <span class="hidden sm:inline text-[10px] font-semibold">Share</span>
+          </button>
           <button id="report-btn" onclick="submitReport()" class="text-xs bg-neutral-950 border border-neutral-800 hover:border-yellow-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-gray-500 hover:text-yellow-500">
             <i class="fas fa-flag text-[10px]" id="report-icon"></i>
             <span class="hidden sm:inline text-[10px] font-semibold" id="report-label">Report</span>
@@ -145,7 +149,7 @@
           class="w-full bg-transparent border-0 outline-none text-xs text-white placeholder-gray-600"/>
       </div>
       <div class="glass rounded-2xl p-3 flex-1 overflow-hidden">
-        <div id="channels-list" class="channels-list grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2"></div>
+        <div id="channels-list" class="channels-list grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-2 gap-2"></div>
       </div>
     </div>
   </div>
@@ -254,6 +258,16 @@ async function submitReport() {
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _tt;
+function shareChannel() {
+  const url = window.location.href;
+  const name = document.getElementById('ch-name').textContent || 'Zeroex TV';
+  if (navigator.share) {
+    navigator.share({ title: `${name} — Zeroex TV`, text: `Watch ${name} live on Zeroex TV`, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => showToast('🔗 Link copied!')).catch(() => showToast(url));
+  }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
