@@ -18,9 +18,9 @@
     .glass{background:rgba(8,8,8,0.9);border:1px solid #141414;backdrop-filter:blur(12px);}
     @media(min-width:1024px){.main-grid{display:grid;grid-template-columns:1fr 340px;gap:12px;align-items:start;}.right-panel{position:sticky;top:80px;max-height:calc(100vh - 100px);display:flex;flex-direction:column;gap:10px;}.channels-list{flex:1;overflow-y:auto;max-height:calc(100vh - 260px);}}
     @media(max-width:1023px){.main-grid{display:flex;flex-direction:column;gap:10px;}.channels-list{max-height:55vh;overflow-y:auto;}}
-    @media(max-width:767px){.video-wrapper{width:calc(100% + 1.5rem);margin-left:-0.75rem;margin-right:-0.75rem;border-radius:0!important;border-left:none!important;border-right:none!important;}}
     .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:1.2rem;overflow:hidden;}
     .video-wrapper video{width:100%;height:100%;object-fit:contain;display:block;}
+    @media(max-width:767px){.video-wrapper{width:calc(100% + 1.5rem);margin-left:-0.75rem;margin-right:-0.75rem;border-radius:0!important;border-left:none!important;border-right:none!important;}}
     .player-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.95));padding:36px 14px 14px;opacity:0;transition:opacity 0.25s;z-index:20;}
     .video-wrapper:hover .player-controls{opacity:1;}
     .player-controls.always-show{opacity:1!important;}
@@ -182,6 +182,18 @@ function updatePlayerAspectRatio() {
   }
 }
 const videoWrap = document.getElementById('video-wrap');
+
+// Some mobile WebViews (in-app browsers) silently fail to engage the audio
+// track on a fresh stream even though video.muted is false — the only thing
+// that reliably wakes the audio pipeline is an actual change to .volume.
+// Toggling the mute button alone doesn't help because .muted never changes
+// (it was already false), so we nudge .volume slightly on every playback start.
+video.addEventListener('playing', () => {
+  if (isMuted) return;
+  const v = video.volume || 1;
+  video.volume = v > 0.05 ? v - 0.01 : 1;
+  setTimeout(() => { video.volume = v; }, 60);
+});
 
 // ── Favorites ─────────────────────────────────────────────────────
 function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } }
