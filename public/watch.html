@@ -160,6 +160,7 @@
 </footer>
 
 <script>
+const PROXY_BASE = 'https://tv.nb-proxy.workers.dev'; // Cloudflare Worker — ভিডিও ট্রাফিক এখন এখান দিয়ে যাবে, Render দিয়ে না
 const FAV_KEY = 'zeroex_tv_favs';
 const channelId = window.location.pathname.split('/watch/')[1]; // slug (or legacy _id) from the URL
 let realId = null; // actual Mongo _id, filled in once the channel loads — used as the stable favorite/report key
@@ -346,7 +347,7 @@ function buildStreamUrl(stream) {
     if (stream.referer) params.set('referer', stream.referer);
     if (stream.origin) params.set('origin', stream.origin);
     if (stream.userAgent) params.set('ua', stream.userAgent);
-    url = '/api/iptv/proxy?' + params.toString();
+    url = PROXY_BASE + '/proxy?' + params.toString();
   }
   return url;
 }
@@ -375,7 +376,7 @@ function buildProxyUrl(stream) {
   if (stream.referer) params.set('referer', stream.referer);
   if (stream.origin)  params.set('origin',  stream.origin);
   if (stream.userAgent) params.set('ua', stream.userAgent);
-  return '/api/iptv/proxy?' + params.toString();
+  return PROXY_BASE + '/proxy?' + params.toString();
 }
 
 // ── Load Stream ────────────────────────────────────────────────────
@@ -411,7 +412,7 @@ function loadStream(stream, usingProxy = false) {
   function onFatal() {
     clearTimeout(failoverTimer);
     // Direct failed → silently retry via proxy (CORS/network issue)
-    if (!shouldProxy && !url.startsWith('/api/iptv/proxy')) {
+    if (!shouldProxy && !url.startsWith(PROXY_BASE + '/proxy')) {
       showLoader('Retrying via server proxy...');
       setTimeout(() => loadStream(stream, true), 800);
       return;
