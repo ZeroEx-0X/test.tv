@@ -21,6 +21,8 @@
     .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:1.2rem;overflow:hidden;}
     .video-wrapper video{width:100%;height:100%;object-fit:contain;display:block;}
     @media(max-width:767px){.video-wrapper{width:calc(100% + 1.5rem);margin-left:-0.75rem;margin-right:-0.75rem;border-radius:0!important;border-left:none!important;border-right:none!important;}}
+    /* মোবাইল/ট্যাবলেট ভিউতে (main-grid যেখানে column হয়ে যায়) হেডারের ঠিক নিচে প্লেয়ারও sticky থাকবে */
+    @media(max-width:1023px){.video-wrapper{position:sticky;top:var(--header-h,64px);z-index:15;}}
     .player-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.95));padding:36px 14px 14px;opacity:0;transition:opacity 0.25s;z-index:20;}
     .video-wrapper:hover .player-controls{opacity:1;}
     .player-controls.always-show{opacity:1!important;}
@@ -61,7 +63,7 @@
 <div id="pip-badge" onclick="togglePiP()"><i class="fas fa-compress mr-1.5"></i>Exit PiP</div>
 <div id="toast"></div>
 
-<header class="w-full max-w-7xl mx-auto px-3 pt-3 pb-0">
+<header id="site-header" class="sticky top-0 z-40 w-full max-w-7xl mx-auto px-3 pt-3 pb-0">
   <div class="glass rounded-2xl px-4 py-3 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
       <div class="w-8 h-8 rounded-xl border border-neutral-800 bg-neutral-950 flex items-center justify-center flex-shrink-0">
@@ -161,6 +163,17 @@
 
 <script>
 const PROXY_BASE = 'https://tv.nb-proxy.workers.dev'; // Cloudflare Worker — ভিডিও ট্রাফিক এখন এখান দিয়ে যাবে, Render দিয়ে না
+
+// হেডারের প্রকৃত উচ্চতা মেপে CSS variable-এ বসানো হচ্ছে, যাতে sticky
+// প্লেয়ার (মোবাইল ভিউতে) ঠিক হেডারের নিচেই লেগে থাকে, ফাঁক বা ওভারল্যাপ না হয়
+function updateHeaderHeightVar() {
+  const h = document.getElementById('site-header')?.offsetHeight || 64;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+window.addEventListener('resize', updateHeaderHeightVar);
+window.addEventListener('load', updateHeaderHeightVar);
+updateHeaderHeightVar();
+
 const FAV_KEY = 'zeroex_tv_favs';
 const channelId = window.location.pathname.split('/watch/')[1]; // slug (or legacy _id) from the URL
 let realId = null; // actual Mongo _id, filled in once the channel loads — used as the stable favorite/report key
