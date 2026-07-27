@@ -21,8 +21,6 @@
     .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:1.2rem;overflow:hidden;}
     .video-wrapper video{width:100%;height:100%;object-fit:contain;display:block;}
     @media(max-width:767px){.video-wrapper{width:calc(100% + 1.5rem);margin-left:-0.75rem;margin-right:-0.75rem;border-radius:0!important;border-left:none!important;border-right:none!important;}}
-    /* মোবাইল/ট্যাবলেট ভিউতে (main-grid যেখানে column হয়ে যায়) হেডারের ঠিক নিচে প্লেয়ারও sticky থাকবে */
-    @media(max-width:1023px){.video-wrapper{position:sticky;top:var(--header-h,64px);z-index:15;}}
     .player-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,0.95));padding:36px 14px 14px;opacity:0;transition:opacity 0.25s;z-index:20;}
     .video-wrapper:hover .player-controls{opacity:1;}
     .player-controls.always-show{opacity:1!important;}
@@ -63,7 +61,7 @@
 <div id="pip-badge" onclick="togglePiP()"><i class="fas fa-compress mr-1.5"></i>Exit PiP</div>
 <div id="toast"></div>
 
-<header id="site-header" class="sticky top-0 z-40 w-full max-w-7xl mx-auto px-3 pt-3 pb-0">
+<header class="w-full max-w-7xl mx-auto px-3 pt-3 pb-0">
   <div class="glass rounded-2xl px-4 py-3 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
       <div class="w-8 h-8 rounded-xl border border-neutral-800 bg-neutral-950 flex items-center justify-center flex-shrink-0">
@@ -163,17 +161,6 @@
 
 <script>
 const PROXY_BASE = 'https://tv.nb-proxy.workers.dev'; // Cloudflare Worker — ভিডিও ট্রাফিক এখন এখান দিয়ে যাবে, Render দিয়ে না
-
-// হেডারের প্রকৃত উচ্চতা মেপে CSS variable-এ বসানো হচ্ছে, যাতে sticky
-// প্লেয়ার (মোবাইল ভিউতে) ঠিক হেডারের নিচেই লেগে থাকে, ফাঁক বা ওভারল্যাপ না হয়
-function updateHeaderHeightVar() {
-  const h = document.getElementById('site-header')?.offsetHeight || 64;
-  document.documentElement.style.setProperty('--header-h', h + 'px');
-}
-window.addEventListener('resize', updateHeaderHeightVar);
-window.addEventListener('load', updateHeaderHeightVar);
-updateHeaderHeightVar();
-
 const FAV_KEY = 'zeroex_tv_favs';
 const channelId = window.location.pathname.split('/watch/')[1]; // slug (or legacy _id) from the URL
 let realId = null; // actual Mongo _id, filled in once the channel loads — used as the stable favorite/report key
@@ -384,24 +371,17 @@ function isRawTsStream(stream) {
 }
 
 // ── Build proxy URL explicitly ─────────────────────────────────────
-// tier 1 = Cloudflare Worker (saves Render bandwidth)
-// tier 2 = Render's own /api/iptv/proxy (fallback — some IPTV providers
-//          are themselves behind Cloudflare, and a Cloudflare Worker can't
-//          reach another Cloudflare-protected origin on a non-standard port;
-//          that shows up as Cloudflare error 1003. Render's proxy isn't on
-//          Cloudflare's network, so it doesn't hit that restriction.)
-function buildProxyUrl(stream, tier = 1) {
+function buildProxyUrl(stream) {
   const params = new URLSearchParams({ url: stream.url });
   if (stream.referer) params.set('referer', stream.referer);
   if (stream.origin)  params.set('origin',  stream.origin);
   if (stream.userAgent) params.set('ua', stream.userAgent);
-  const base = tier === 2 ? '/api/iptv/proxy?' : (PROXY_BASE + '/proxy?');
-  return base + params.toString();
+  return PROXY_BASE + '/proxy?' + params.toString();
 }
 
 // ── Load Stream ────────────────────────────────────────────────────
-// proxyTier: 0 = try direct, 1 = Cloudflare Worker proxy, 2 = Render local proxy (last resort)
-function loadStream(stream, proxyTier = 0) {
+// usingProxy=true means this is already the proxy attempt (no further fallback)
+function loadStream(stream, usingProxy = false) {
   if (!stream || !stream.url) { showLoader('No stream URL available.'); return; }
   showLoader('Loading ' + (stream.label || 'stream') + '...');
   const myGen = ++streamGeneration;
@@ -418,10 +398,8 @@ function loadStream(stream, proxyTier = 0) {
   // Raw MAG/Xtream TS endpoints redirect to a tokenized URL and commonly do
   // not expose CORS headers. Start them through our proxy so mpegts.js receives
   // the final live response consistently on both HTTP and HTTPS previews.
-  const forceProxy = stream.useProxy || isRawTsStream(stream) || needsProxy(stream.url);
-  const effectiveTier = proxyTier > 0 ? proxyTier : (forceProxy ? 1 : 0);
-  const shouldProxy = effectiveTier > 0;
-  const url = shouldProxy ? buildProxyUrl(stream, effectiveTier) : buildStreamUrl(stream);
+  const shouldProxy = usingProxy || stream.useProxy || isRawTsStream(stream) || needsProxy(stream.url);
+  const url = shouldProxy ? buildProxyUrl(stream) : buildStreamUrl(stream);
   const type = detectType(stream);
 
   // auto-failover between servers (only when multiple)
@@ -433,20 +411,13 @@ function loadStream(stream, proxyTier = 0) {
 
   function onFatal() {
     clearTimeout(failoverTimer);
-    // Direct failed → silently retry via the Cloudflare Worker proxy (CORS/network issue)
-    if (effectiveTier === 0) {
-      showLoader('Retrying via proxy...');
-      setTimeout(() => loadStream(stream, 1), 800);
+    // Direct failed → silently retry via proxy (CORS/network issue)
+    if (!shouldProxy && !url.startsWith(PROXY_BASE + '/proxy')) {
+      showLoader('Retrying via server proxy...');
+      setTimeout(() => loadStream(stream, true), 800);
       return;
     }
-    // Cloudflare Worker failed → this provider is likely itself behind Cloudflare
-    // (causes error 1003 for a Worker), so fall back to Render's own proxy
-    if (effectiveTier === 1) {
-      showLoader('Retrying via backup server...');
-      setTimeout(() => loadStream(stream, 2), 800);
-      return;
-    }
-    // Render proxy also failed → next server or error
+    // Proxy also failed → next server or error
     STREAMS.length > 1 ? tryNextServer() : showLoader('Stream unavailable. Try another server or check the URL.');
   }
 
